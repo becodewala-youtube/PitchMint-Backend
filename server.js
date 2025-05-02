@@ -16,18 +16,28 @@ connectDB();
 const app = express();
 
 // Middleware
-// Middleware
 app.use(cors({
   origin: (origin, callback) => {
-    const allowedOrigins = ['http://localhost:5173','http://localhost:5174', 'https://pitch-mint-frontend.vercel.app']; // Add all allowed origins here
-    if (allowedOrigins.indexOf(origin) !== -1 || !origin) {
-      callback(null, true);  // Allow the request
+    const allowedOrigins = [
+      'http://localhost:5173',
+      'http://localhost:5174',
+      'https://pitch-mint-frontend.vercel.app'
+    ];
+    if (allowedOrigins.includes(origin) || !origin) {
+      callback(null, true);
     } else {
-      callback(new Error('Not allowed by CORS'));  // Reject the request
+      callback(new Error('Not allowed by CORS'));
     }
   },
-  credentials: true,  // Allow cookies to be sent
+  credentials: true
 }));
+
+// 🔥 Add this middleware to ensure the header is sent
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Credentials', 'true');
+  next();
+});
+
 
 app.use(express.json());
 app.use(sanitizeInput);
