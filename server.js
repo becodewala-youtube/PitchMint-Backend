@@ -11,7 +11,10 @@ const logger = require('./utils/logger');
 dotenv.config();
 
 // Connect to MongoDB
-connectDB();
+connectDB().catch(err => {
+  logger.error('Failed to connect to MongoDB:', err);
+  process.exit(1);  // Exit process with failure
+});
 
 const app = express();
 
@@ -24,12 +27,6 @@ const allowedOrigins = [
 
 // ✅ CORS middleware
 app.use(cors({
-  origin: allowedOrigins,
-  credentials: true
-}));
-
-// ✅ Handle preflight requests (OPTIONS)
-app.options('*', cors({
   origin: allowedOrigins,
   credentials: true
 }));
