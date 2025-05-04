@@ -42,7 +42,7 @@ app.use(cors({
   credentials: true, // required for cookies or sessions
 })); */
 
-app.use(cors())
+app.use(cors({      origin: 'https://pitch-mint-frontend.vercel.app', }))
 
 
 // ✅ General middleware (after raw and CORS)
