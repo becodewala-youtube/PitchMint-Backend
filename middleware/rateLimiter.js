@@ -8,7 +8,7 @@ const apiLimiter = rateLimit({
 
 const authLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
-  max: 5, // Limit each IP to 5 login/register requests per hour
+  max: 10, // Limit each IP to 5 login/register requests per hour
   message: 'Too many authentication attempts, please try again after an hour'
 });
 

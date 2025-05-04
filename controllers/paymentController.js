@@ -89,19 +89,20 @@ const handlePaymentSuccess = async (req, res) => {
 const verifyPaymentSession = async (req, res) => {
   try {
     const { sessionId } = req.params;
-    
     const session = await stripe.checkout.sessions.retrieve(sessionId);
-    
+
     if (session.payment_status === 'paid') {
       const userId = session.metadata.userId;
-      
-      // Get updated user data
+
+      // Get and update user
       const user = await User.findById(userId);
-      
       if (!user) {
         return res.status(404).json({ message: 'User not found' });
       }
-      
+
+      user.isPremium = true; // ✅ Set isPremium to true
+      await user.save();     // ✅ Save the updated user
+
       res.json({
         success: true,
         user: {
@@ -111,11 +112,13 @@ const verifyPaymentSession = async (req, res) => {
           isPremium: user.isPremium
         }
       });
+
+      console.log('User updated to premium:', user);
     } else {
       res.status(400).json({ message: 'Payment not completed' });
     }
   } catch (error) {
-    logger.error('Error verifying payment session:', error);
+    console.error('Error verifying payment session:', error);
     res.status(500).json({ message: 'Error verifying payment' });
   }
 };
