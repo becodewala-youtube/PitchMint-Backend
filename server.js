@@ -11,31 +11,30 @@ const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 // ✅ Load environment variables
 dotenv.config();
 
+
+
+const app = express();
+
 // ✅ Connect to MongoDB
 connectDB().catch(err => {
   logger.error('Failed to connect to MongoDB:', err);
   process.exit(1);
 });
 
-const app = express();
-
 // ✅ Stripe Webhook raw body parser (must come before express.json)
 app.use('/webhook', express.raw({ type: 'application/json' }));
 
-const allowedOrigins = [
-  'https://pitch-mint-frontend.vercel.app',
-  'http://localhost:5173', // optional for local testing
-];
-
+// Middleware
 app.use(cors({
-  origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
+  origin: (origin, callback) => {
+    const allowedOrigins = ['http://localhost:5173','http://localhost:5174', 'https://pitch-mint-frontend.vercel.app']; // Add all allowed origins here
+    if (allowedOrigins.indexOf(origin) !== -1 || !origin) {
+      callback(null, true);  // Allow the request
     } else {
-      callback(new Error('Not allowed by CORS'));
+      callback(new Error('Not allowed by CORS'));  // Reject the request
     }
   },
-  credentials: true, // important!
+  credentials: true,  // Allow cookies to be sent
 }));
 
 
