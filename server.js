@@ -26,7 +26,7 @@ app.use('/webhook', express.raw({ type: 'application/json' }));
 
 // Middleware
 
-const allowedOrigins = [
+/* const allowedOrigins = [
   'http://localhost:5173',
   'https://pitch-mint-frontend.vercel.app'
 ];
@@ -40,7 +40,9 @@ app.use(cors({
     }
   },
   credentials: true, // required for cookies or sessions
-}));
+})); */
+
+app.use(cors())
 
 
 // ✅ General middleware (after raw and CORS)
