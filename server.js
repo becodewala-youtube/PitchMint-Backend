@@ -11,14 +11,22 @@ const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 // ✅ Load environment variables
 dotenv.config();
 
+<<<<<<< HEAD
 // ✅ Connect to MongoDB
 connectDB().catch(err => {
   logger.error('Failed to connect to MongoDB:', err);
   process.exit(1);
+=======
+// Connect to MongoDB
+connectDB().catch(err => {
+  logger.error('Failed to connect to MongoDB:', err);
+  process.exit(1);  // Exit process with failure
+>>>>>>> cdc4f7f0b6319522aa1ec82c0b90cc8101541ac8
 });
 
 const app = express();
 
+<<<<<<< HEAD
 // ✅ Stripe Webhook needs raw body before express.json()
 app.use(
   '/webhook',
@@ -65,6 +73,24 @@ app.use(cors({
   credentials: true
 }));
 app.use(express.json()); // Must come after raw body parsing for /webhook
+=======
+// Middleware
+app.use(cors({
+  origin: (origin, callback) => {
+    const allowedOrigins = ['http://localhost:5173','http://localhost:5174', 'https://pitch-mint-frontend.vercel.app']; // Add all allowed origins here
+    if (allowedOrigins.indexOf(origin) !== -1 || !origin) {
+      callback(null, true);  // Allow the request
+    } else {
+      callback(new Error('Not allowed by CORS'));  // Reject the request
+    }
+  },
+  credentials: true,  // Allow cookies to be sent
+}));
+
+
+// Body parser & sanitization
+app.use(express.json());
+>>>>>>> cdc4f7f0b6319522aa1ec82c0b90cc8101541ac8
 app.use(sanitizeInput);
 app.use('/api/auth', authLimiter);
 app.use('/api', apiLimiter);
