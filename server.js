@@ -44,8 +44,9 @@ app.use(cors({
 
 app.use(cors({      origin: 'https://pitch-mint-frontend.vercel.app',
   credentials: true, // required for cookies or sessions
- }))
+ },))
 
+ 
 
 // ✅ General middleware (after raw and CORS)
 app.use(express.json()); // Must come after raw body parsing for /webhook
