@@ -1,48 +1,73 @@
 const express = require('express');
 const dotenv = require('dotenv');
 const cors = require('cors');
-const connectDB = require('./config/db');
 const morgan = require('morgan');
+const connectDB = require('./config/db');
 const { apiLimiter, authLimiter } = require('./middleware/rateLimiter');
 const { sanitizeInput } = require('./middleware/sanitizer');
 const logger = require('./utils/logger');
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
-// Load environment variables
+// ✅ Load environment variables
 dotenv.config();
 
-// Connect to MongoDB
-connectDB();
+// ✅ Connect to MongoDB
+connectDB().catch(err => {
+  logger.error('Failed to connect to MongoDB:', err);
+  process.exit(1);
+});
 
 const app = express();
 
-// ✅ Allowed origins for CORS
-const allowedOrigins = [
-  'http://localhost:5173',
-  'http://localhost:5174',
-  'https://pitch-mint-frontend.vercel.app'
-];
+// ✅ Stripe Webhook needs raw body before express.json()
+app.use(
+  '/webhook',
+  express.raw({ type: 'application/json' }) // ONLY for Stripe webhook
+);
 
-// ✅ CORS middleware
+// ✅ Webhook route
+app.post('/webhook', (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+  let event;
+  try {
+    event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
+  } catch (err) {
+    logger.error('❌ Webhook signature verification failed:', err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  // ✅ Handle Stripe events
+  switch (event.type) {
+    case 'checkout.session.completed':
+      const session = event.data.object;
+      logger.info('✅ Payment successful:', session);
+      // TODO: Save to DB or trigger email here
+      break;
+    default:
+      logger.warn(`Unhandled event type: ${event.type}`);
+  }
+
+  res.status(200).json({ received: true });
+});
+
+// ✅ General middleware (after raw parser)
 app.use(cors({
-  origin: allowedOrigins,
+  origin: (origin, callback) => {
+    const allowedOrigins = ['http://localhost:5173', 'http://localhost:5174', 'https://pitch-mint-frontend.vercel.app'];
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true
 }));
-
-// ✅ Handle preflight requests (OPTIONS)
-app.options('*', cors({
-  origin: allowedOrigins,
-  credentials: true
-}));
-
-// Body parser & sanitization
-app.use(express.json());
+app.use(express.json()); // Must come after raw body parsing for /webhook
 app.use(sanitizeInput);
-
-// Rate limiting
 app.use('/api/auth', authLimiter);
 app.use('/api', apiLimiter);
-
-// Request logger in development
 if (process.env.NODE_ENV === 'development') {
   app.use(morgan('dev'));
 }
@@ -62,7 +87,7 @@ app.use('/api/canvas', canvasRoutes);
 app.use('/api/investors', investorRoutes);
 app.use('/api/payment', paymentRoutes);
 
-// ✅ Health check route
+// ✅ Health check
 app.get('/', (req, res) => {
   res.json({ message: 'Welcome to PitchMint API' });
 });
@@ -71,7 +96,6 @@ app.get('/', (req, res) => {
 app.use((err, req, res, next) => {
   logger.error(err.stack);
   const statusCode = err.statusCode || 500;
-  
   res.status(statusCode).json({
     message: err.message || 'Internal Server Error',
     stack: process.env.NODE_ENV === 'development' ? err.stack : {}
@@ -81,5 +105,5 @@ app.use((err, req, res, next) => {
 // ✅ Start server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  logger.info(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
+  logger.info(`🚀 Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
 });
