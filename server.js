@@ -25,16 +25,21 @@ connectDB().catch(err => {
 app.use('/webhook', express.raw({ type: 'application/json' }));
 
 // Middleware
+
+const allowedOrigins = [
+  'http://localhost:5173',
+  'https://pitch-mint-frontend.vercel.app'
+];
+
 app.use(cors({
-  origin: (origin, callback) => {
-    const allowedOrigins = ['http://localhost:5173','http://localhost:5174', 'https://pitch-mint-frontend.vercel.app']; // Add all allowed origins here
-    if (allowedOrigins.indexOf(origin) !== -1 || !origin) {
-      callback(null, true);  // Allow the request
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
     } else {
-      callback(new Error('Not allowed by CORS'));  // Reject the request
+      callback(new Error('Not allowed by CORS'));
     }
   },
-  credentials: true,  // Allow cookies to be sent
+  credentials: true, // required for cookies or sessions
 }));
 
 
