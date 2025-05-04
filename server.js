@@ -22,22 +22,22 @@ const app = express();
 // ✅ Stripe Webhook raw body parser (must come before express.json)
 app.use('/webhook', express.raw({ type: 'application/json' }));
 
-// ✅ CORS middleware (must come before all routes and body parsers)
+const allowedOrigins = [
+  'https://pitch-mint-frontend.vercel.app',
+  'http://localhost:5173', // optional for local testing
+];
+
 app.use(cors({
-  origin: (origin, callback) => {
-    const allowedOrigins = [
-      'http://localhost:5173',
-      'http://localhost:5174',
-      'https://pitch-mint-frontend.vercel.app'
-    ];
+  origin: function (origin, callback) {
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
     }
   },
-  credentials: true
+  credentials: true, // important!
 }));
+
 
 // ✅ General middleware (after raw and CORS)
 app.use(express.json()); // Must come after raw body parsing for /webhook
