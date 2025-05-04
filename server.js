@@ -11,29 +11,45 @@ const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 // ✅ Load environment variables
 dotenv.config();
 
-<<<<<<< HEAD
 // ✅ Connect to MongoDB
 connectDB().catch(err => {
   logger.error('Failed to connect to MongoDB:', err);
   process.exit(1);
-=======
-// Connect to MongoDB
-connectDB().catch(err => {
-  logger.error('Failed to connect to MongoDB:', err);
-  process.exit(1);  // Exit process with failure
->>>>>>> cdc4f7f0b6319522aa1ec82c0b90cc8101541ac8
 });
 
 const app = express();
 
-<<<<<<< HEAD
-// ✅ Stripe Webhook needs raw body before express.json()
-app.use(
-  '/webhook',
-  express.raw({ type: 'application/json' }) // ONLY for Stripe webhook
-);
+// ✅ Stripe Webhook raw body parser (must come before express.json)
+app.use('/webhook', express.raw({ type: 'application/json' }));
 
-// ✅ Webhook route
+// ✅ CORS middleware (must come before all routes and body parsers)
+app.use(cors({
+  origin: (origin, callback) => {
+    const allowedOrigins = [
+      'http://localhost:5173',
+      'http://localhost:5174',
+      'https://pitch-mint-frontend.vercel.app'
+    ];
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true
+}));
+
+// ✅ General middleware (after raw and CORS)
+app.use(express.json()); // Must come after raw body parsing for /webhook
+app.use(sanitizeInput);
+app.use('/api/auth', authLimiter);
+app.use('/api', apiLimiter);
+
+if (process.env.NODE_ENV === 'development') {
+  app.use(morgan('dev'));
+}
+
+// ✅ Stripe Webhook handler
 app.post('/webhook', (req, res) => {
   const sig = req.headers['stripe-signature'];
   const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -59,44 +75,6 @@ app.post('/webhook', (req, res) => {
 
   res.status(200).json({ received: true });
 });
-
-// ✅ General middleware (after raw parser)
-app.use(cors({
-  origin: (origin, callback) => {
-    const allowedOrigins = ['http://localhost:5173', 'http://localhost:5174', 'https://pitch-mint-frontend.vercel.app'];
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true
-}));
-app.use(express.json()); // Must come after raw body parsing for /webhook
-=======
-// Middleware
-app.use(cors({
-  origin: (origin, callback) => {
-    const allowedOrigins = ['http://localhost:5173','http://localhost:5174', 'https://pitch-mint-frontend.vercel.app']; // Add all allowed origins here
-    if (allowedOrigins.indexOf(origin) !== -1 || !origin) {
-      callback(null, true);  // Allow the request
-    } else {
-      callback(new Error('Not allowed by CORS'));  // Reject the request
-    }
-  },
-  credentials: true,  // Allow cookies to be sent
-}));
-
-
-// Body parser & sanitization
-app.use(express.json());
->>>>>>> cdc4f7f0b6319522aa1ec82c0b90cc8101541ac8
-app.use(sanitizeInput);
-app.use('/api/auth', authLimiter);
-app.use('/api', apiLimiter);
-if (process.env.NODE_ENV === 'development') {
-  app.use(morgan('dev'));
-}
 
 // ✅ Routes
 const authRoutes = require('./routes/authRoutes');
