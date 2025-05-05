@@ -25,7 +25,7 @@ connectDB().catch(err => {
 app.use('/webhook', express.raw({ type: 'application/json' }));
 
 // Middleware
-/* 
+
 const allowedOrigins = [
   'http://localhost:5173',
   'https://pitch-mint-frontend.vercel.app'
@@ -40,11 +40,11 @@ app.use(cors({
     }
   },
   credentials: true, // required for cookies or sessions
-})); */
+}));
 
-app.use(cors({      origin: 'https://pitch-mint-frontend.vercel.app',
+/* app.use(cors({      origin: 'https://pitch-mint-frontend.vercel.app',
   credentials: true, // required for cookies or sessions
- },))
+ },)) */
 
  
 
@@ -92,6 +92,9 @@ const pitchDeckRoutes = require('./routes/pitchDeckRoutes');
 const canvasRoutes = require('./routes/canvasRoutes');
 const investorRoutes = require('./routes/investorRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
+const competitorRoutes = require('./routes/competitorRoutes');
+const pitchSimulatorRoutes = require('./routes/pitchSimulatorRoutes');
+
 
 app.use('/api/auth', authRoutes);
 app.use('/api/idea', ideaRoutes);
@@ -99,6 +102,8 @@ app.use('/api/pitchdeck', pitchDeckRoutes);
 app.use('/api/canvas', canvasRoutes);
 app.use('/api/investors', investorRoutes);
 app.use('/api/payment', paymentRoutes);
+app.use('/api/competitors', competitorRoutes);
+app.use('/api/pitch-simulator', pitchSimulatorRoutes);
 
 // ✅ Health check
 app.get('/', (req, res) => {

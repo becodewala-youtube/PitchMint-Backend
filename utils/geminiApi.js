@@ -217,8 +217,123 @@ const generateCanvas = async (ideaText, analysis) => {
   }
 };
 
+// Add new functions for competitor analysis and pitch simulation
+const generateCompetitorAnalysis = async (ideaText) => {
+  try {
+    const prompt = `
+      Analyze potential competitors for this startup idea: "${ideaText}"
+      
+      Provide a detailed SWOT analysis for the top 3-5 competitors in this space.
+      For each competitor include:
+      1. Company name and brief description
+      2. Strengths
+      3. Weaknesses
+      4. Opportunities 
+      5. Threats
+      
+      Format your response as a JSON object with this structure:
+      {
+        "competitors": [
+          {
+            "name": "Competitor Name",
+            "description": "Brief description",
+            "swot": {
+              "strengths": ["Strength 1", "Strength 2"],
+              "weaknesses": ["Weakness 1", "Weakness 2"],
+              "opportunities": ["Opportunity 1", "Opportunity 2"],
+              "threats": ["Threat 1", "Threat 2"]
+            }
+          }
+        ],
+        "summary": "Overall competitive landscape analysis"
+      }
+    `;
+
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const textResponse = response.text();
+    
+    const jsonMatch = textResponse.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error('Failed to parse AI response');
+    }
+    
+    return JSON.parse(jsonMatch[0]);
+  } catch (error) {
+    console.error('Error generating competitor analysis:', error);
+    throw new Error('Failed to analyze competitors');
+  }
+};
+
+const simulateInvestorQA = async (pitch, question = null, answer = null) => {
+  try {
+    let prompt;
+    
+    if (!question && !answer) {
+      // Generate initial questions
+      prompt = `
+        As an experienced venture capitalist, review this startup pitch:
+        "${pitch}"
+        
+        Generate 5 critical questions that an investor would ask. Focus on:
+        - Market size and opportunity
+        - Business model and revenue
+        - Competition and differentiation
+        - Growth strategy
+        - Team and execution
+        
+        Format your response as a JSON array of questions:
+        {
+          "questions": [
+            {
+              "id": "1",
+              "question": "Question text",
+              "category": "Category (e.g., Market, Revenue, etc.)"
+            }
+          ]
+        }
+      `;
+    } else {
+      // Evaluate the answer
+      prompt = `
+        As an experienced venture capitalist, evaluate this response:
+        
+        Pitch: "${pitch}"
+        Question: "${question}"
+        Answer: "${answer}"
+        
+        Provide feedback on the answer's effectiveness. Format response as:
+        {
+          "feedback": {
+            "rating": 1-5 score,
+            "strengths": ["Strength 1", "Strength 2"],
+            "improvements": ["Improvement 1", "Improvement 2"],
+            "additionalAdvice": "Overall advice"
+          }
+        }
+      `;
+    }
+
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const textResponse = response.text();
+    
+    const jsonMatch = textResponse.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error('Failed to parse AI response');
+    }
+    
+    return JSON.parse(jsonMatch[0]);
+  } catch (error) {
+    console.error('Error in pitch simulation:', error);
+    throw new Error('Failed to process pitch simulation');
+  }
+};
+
 module.exports = {
   validateIdea,
   generatePitchDeck,
   generateCanvas,
+  generateCompetitorAnalysis,
+  simulateInvestorQA
 };

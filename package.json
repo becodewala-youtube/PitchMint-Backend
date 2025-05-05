@@ -1,7 +1,7 @@
 {
-  "name": "ideaforge-backend",
+  "name": "pitchmint-backend",
   "version": "1.0.0",
-  "description": "Backend API for IdeaForge startup validation platform",
+  "description": "Backend API for PitchMint startup validation platform",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {
@@ -9,18 +9,17 @@
     "dev": "nodemon server.js"
   },
   "dependencies": {
-    "@google/generative-ai": "^0.24.1",
+    "@google/generative-ai": "^0.2.1",
     "bcryptjs": "^2.4.3",
-    "body-parser": "^2.2.0",
     "cors": "^2.8.5",
-    "dotenv": "^16.5.0",
-    "express": "^4.21.2",
+    "dotenv": "^16.4.5",
+    "express": "^4.18.3",
     "express-rate-limit": "^7.1.5",
     "express-validator": "^7.0.1",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.2.2",
     "morgan": "^1.10.0",
-    "stripe": "^14.25.0",
+    "stripe": "^14.19.0",
     "winston": "^3.12.0",
     "xss-clean": "^0.1.4"
   },
