@@ -217,48 +217,57 @@ const generateCanvas = async (ideaText, analysis) => {
   }
 };
 
+
 // Add new functions for competitor analysis and pitch simulation
 const generateCompetitorAnalysis = async (ideaText) => {
   try {
     const prompt = `
-      Analyze potential competitors for this startup idea: "${ideaText}"
-      
-      Provide a detailed SWOT analysis for the top 3-5 competitors in this space.
-      For each competitor include:
-      1. Company name and brief description
-      2. Strengths
-      3. Weaknesses
-      4. Opportunities 
-      5. Threats
-      
-      Format your response as a JSON object with this structure:
-      {
-        "competitors": [
-          {
-            "name": "Competitor Name",
-            "description": "Brief description",
-            "swot": {
-              "strengths": ["Strength 1", "Strength 2"],
-              "weaknesses": ["Weakness 1", "Weakness 2"],
-              "opportunities": ["Opportunity 1", "Opportunity 2"],
-              "threats": ["Threat 1", "Threat 2"]
-            }
-          }
-        ],
-        "summary": "Overall competitive landscape analysis"
+You are a startup strategist. Analyze potential competitors for the startup idea below.
+
+Startup Idea: "${ideaText}"
+
+Provide a JSON object ONLY in the following structure:
+
+{
+  "competitors": [
+    {
+      "name": "Competitor Name",
+      "description": "Brief description",
+      "swot": {
+        "strengths": ["Strength 1", "Strength 2"],
+        "weaknesses": ["Weakness 1", "Weakness 2"],
+        "opportunities": ["Opportunity 1", "Opportunity 2"],
+        "threats": ["Threat 1", "Threat 2"]
       }
-    `;
+    }
+  ],
+  "summary": "Overall competitive landscape analysis."
+}
+
+Return only the JSON. Do not include markdown, commentary, or explanations.
+`;
 
     const result = await model.generateContent(prompt);
     const response = await result.response;
     const textResponse = response.text();
+
+    // Extract only the JSON object from the text response
+    const jsonStart = textResponse.indexOf('{');
+    const jsonEnd = textResponse.lastIndexOf('}');
     
-    const jsonMatch = textResponse.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error('Failed to parse AI response');
+    if (jsonStart === -1 || jsonEnd === -1) {
+      throw new Error('No valid JSON object found in Gemini response.');
     }
-    
-    return JSON.parse(jsonMatch[0]);
+
+    const jsonString = textResponse.slice(jsonStart, jsonEnd + 1);
+
+    try {
+      return JSON.parse(jsonString);
+    } catch (parseErr) {
+      console.error('❌ JSON parse error:', parseErr.message);
+      console.error('⚠️ Raw JSON fragment:', jsonString.slice(0, 500)); // print first 500 chars
+      throw new Error('Invalid JSON format from Gemini.');
+    }
   } catch (error) {
     console.error('Error generating competitor analysis:', error);
     throw new Error('Failed to analyze competitors');
