@@ -88,7 +88,6 @@ const ideaSchema = new mongoose.Schema({
   },
   pitchSimulation: {
     questions: [{
-      id: String,
       question: String,
       category: String,
       answer: String,

@@ -3,6 +3,8 @@ const Idea = require('../models/Idea');
 const { simulateInvestorQA } = require('../utils/geminiApi');
 const logger = require('../utils/logger');
 
+
+
 const simulatePitch = async (req, res) => {
   try {
     const { id } = req.params;
@@ -52,9 +54,10 @@ const evaluateAnswer = async (req, res) => {
       return res.status(403).json({ message: 'Not authorized to access this idea' });
     }
 
-    const question = idea.pitchSimulation.questions.find(q => q.id === questionId);
+    const question = idea.pitchSimulation.questions.find(q => q._id.toString() === questionId);
+
     if (!question) {
-      return res.status(404).json({ message: 'Question not found' });
+      return res.status(404).json({ message: 'Question not foundddd' });
     }
 
     const feedback = await simulateInvestorQA(idea.ideaText, question.question, answer);
@@ -71,7 +74,45 @@ const evaluateAnswer = async (req, res) => {
   }
 };
 
+
+const simulatePitchRandom = async (req, res) => {
+  try {
+    const { pitch } = req.body;
+
+    if (!pitch) {
+      return res.status(400).json({ message: 'Please provide your pitch' });
+    }
+
+    const questions = await simulateInvestorQA(pitch);
+    
+    res.json(questions);
+  } catch (error) {
+    logger.error('Error simulating pitch:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+const evaluateAnswerRandom = async (req, res) => {
+  try {
+    const { pitch, question, answer } = req.body;
+
+    if (!pitch || !question || !answer) {
+      return res.status(400).json({ message: 'Please provide pitch, question, and answer' });
+    }
+
+    const feedback = await simulateInvestorQA(pitch, question, answer);
+    
+    res.json(feedback);
+  } catch (error) {
+    logger.error('Error evaluating answer:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+
 module.exports = {
   simulatePitch,
-  evaluateAnswer
+  evaluateAnswer,
+  simulatePitchRandom,
+  evaluateAnswerRandom
 };
