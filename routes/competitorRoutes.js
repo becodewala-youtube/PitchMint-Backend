@@ -1,9 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const { analyzeCompetitors } = require('../controllers/competitorController');
+const { analyzeCompetitors,analyzeCompetitorsRandom } = require('../controllers/competitorController');
 const { protect } = require('../middleware/authMiddleware');
 
-router.post('/analyze', protect, analyzeCompetitors);
+router.post('/analyze', protect, analyzeCompetitorsRandom);
 router.post('/analyze/:id', protect, analyzeCompetitors);
 
 module.exports = router;
