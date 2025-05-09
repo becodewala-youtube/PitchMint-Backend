@@ -1,3 +1,4 @@
+// backend/models/Idea.js
 const mongoose = require('mongoose');
 
 const ideaSchema = new mongoose.Schema({
@@ -71,6 +72,33 @@ const ideaSchema = new mongoose.Schema({
     costStructure: String,
     revenueStreams: String,
     unfairAdvantage: String
+  },
+  competitorAnalysis: {
+    summary: String,
+    competitors: [{
+      name: String,
+      description: String,
+      swot: {
+        strengths: [String],
+        weaknesses: [String],
+        opportunities: [String],
+        threats: [String]
+      }
+    }]
+  },
+  pitchSimulation: {
+    questions: [{
+      id: String,
+      question: String,
+      category: String,
+      answer: String,
+      feedback: {
+        rating: Number,
+        strengths: [String],
+        improvements: [String],
+        additionalAdvice: String
+      }
+    }]
   },
   createdAt: {
     type: Date,
