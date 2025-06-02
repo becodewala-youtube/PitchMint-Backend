@@ -3,9 +3,12 @@ const Idea = require('../models/Idea');
 const { generateCompetitorAnalysis } = require('../utils/geminiApi');
 const logger = require('../utils/logger');
 
+// backend/controllers/competitorController.js
 const analyzeCompetitors = async (req, res) => {
   try {
     const { id } = req.params;
+    const { regenerate } = req.body;
+    
     const idea = await Idea.findById(id);
 
     if (!idea) {
@@ -17,13 +20,19 @@ const analyzeCompetitors = async (req, res) => {
       return res.status(403).json({ message: 'Not authorized to access this idea' });
     }
 
+    // If regenerate is false and we have existing analysis, return it
+    if (!regenerate && idea.competitorAnalysis) {
+      return res.json({ competitorAnalysis: idea.competitorAnalysis });
+    }
+
+    // Generate new analysis
     const analysis = await generateCompetitorAnalysis(idea.ideaText);
     
     // Save the analysis to the database
     idea.competitorAnalysis = analysis;
     await idea.save();
     
-    res.json(idea);
+    res.json({ competitorAnalysis: analysis });
   } catch (error) {
     logger.error('Error analyzing competitors:', error);
     res.status(500).json({ message: error.message });

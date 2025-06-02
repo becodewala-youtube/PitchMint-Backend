@@ -3,8 +3,6 @@ const Idea = require('../models/Idea');
 const { simulateInvestorQA } = require('../utils/geminiApi');
 const logger = require('../utils/logger');
 
-
-
 const simulatePitch = async (req, res) => {
   try {
     const { id } = req.params;
@@ -19,17 +17,21 @@ const simulatePitch = async (req, res) => {
       return res.status(403).json({ message: 'Not authorized to access this idea' });
     }
 
-    const questions = await simulateInvestorQA(idea.ideaText);
-    
-    // Save the questions to the database
-    idea.pitchSimulation = {
-      questions: questions.questions.map(q => ({
-        ...q,
-        answer: '',
-        feedback: null
-      }))
-    };
-    await idea.save();
+    // Only generate new questions if explicitly requested
+    if (!idea.pitchSimulation?.questions || req.query.regenerate === 'true') {
+      const questions = await simulateInvestorQA(idea.ideaText);
+      
+      idea.pitchSimulation = {
+        questions: questions.questions.map((q, index) => ({
+          id: `question_${index}`,
+          question: q.question,
+          category: q.category,
+          answer: '',
+          feedback: null
+        }))
+      };
+      await idea.save();
+    }
     
     res.json(idea);
   } catch (error) {
@@ -38,6 +40,7 @@ const simulatePitch = async (req, res) => {
   }
 };
 
+// backend/controllers/pitchSimulatorController.js
 const evaluateAnswer = async (req, res) => {
   try {
     const { id } = req.params;
@@ -54,25 +57,42 @@ const evaluateAnswer = async (req, res) => {
       return res.status(403).json({ message: 'Not authorized to access this idea' });
     }
 
-    const question = idea.pitchSimulation.questions.find(q => q._id.toString() === questionId);
-
+    const question = idea.pitchSimulation.questions.find(q => q.id === questionId);
     if (!question) {
-      return res.status(404).json({ message: 'Question not foundddd' });
+      return res.status(404).json({ message: 'Question not found' });
     }
 
     const feedback = await simulateInvestorQA(idea.ideaText, question.question, answer);
     
-    // Update the question with the answer and feedback
-    question.answer = answer;
-    question.feedback = feedback.feedback;
+    // Update the specific question in the questions array
+    const updatedQuestions = idea.pitchSimulation.questions.map(q => {
+      if (q.id === questionId) {
+        return {
+          ...q,
+          answer,
+          feedback: feedback.feedback
+        };
+      }
+      return q;
+    });
+
+    idea.pitchSimulation.questions = updatedQuestions;
     await idea.save();
     
-    res.json(idea);
+    res.json({ feedback: feedback.feedback });
   } catch (error) {
-    logger.error('Error evaluating answer:', error);
-    res.status(500).json({ message: error.message });
+  logger.error('Error evaluating answer:', error);
+
+  if (error.message.includes('Failed to process pitch simulation')) {
+    return res.status(503).json({ message: 'Service temporarily unavailable. Please try again shortly.' });
   }
+
+  res.status(500).json({ message: error.message });
+}
+
 };
+
+
 
 
 const simulatePitchRandom = async (req, res) => {
@@ -108,7 +128,6 @@ const evaluateAnswerRandom = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
 
 module.exports = {
   simulatePitch,
