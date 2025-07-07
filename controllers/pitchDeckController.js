@@ -1,4 +1,5 @@
 const Idea = require('../models/Idea');
+const User = require('../models/User');
 const { generatePitchDeck } = require('../utils/geminiApi');
 const logger = require('../utils/logger');
 
@@ -25,8 +26,14 @@ const generatePitchDeckForIdea = async (req, res) => {
     idea.pitchDeckContent = pitchDeckContent;
     await idea.save();
 
+    // Get updated user with current credits
+    const updatedUser = await User.findById(req.user._id);
+
     logger.info(`Generated pitch deck for idea ${idea._id}`);
-    res.json(idea);
+    res.json({
+      ...idea.toObject(),
+      userCredits: updatedUser.credits
+    });
   } catch (error) {
     logger.error('Error generating pitch deck:', error);
     res.status(500).json({ message: 'Failed to generate pitch deck' });
@@ -51,14 +58,19 @@ const regeneratePitchDeck = async (req, res) => {
 
     // Generate new pitch deck
     const pitchDeckContent = await generatePitchDeck(idea.ideaText, idea.analysis);
-    console.log('Generated pitch deck content:', pitchDeckContent);
     
     // Update idea with new pitch deck content
     idea.pitchDeckContent = pitchDeckContent;
     await idea.save();
 
+    // Get updated user with current credits
+    const updatedUser = await User.findById(req.user._id);
+
     logger.info(`Regenerated pitch deck for idea ${idea._id}`);
-    res.json(idea);
+    res.json({
+      ...idea.toObject(),
+      userCredits: updatedUser.credits
+    });
   } catch (error) {
     logger.error('Error regenerating pitch deck:', error);
     res.status(500).json({ message: 'Failed to regenerate pitch deck' });

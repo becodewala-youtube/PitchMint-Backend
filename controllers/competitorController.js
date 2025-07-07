@@ -1,5 +1,6 @@
 // backend/controllers/competitorController.js
 const Idea = require('../models/Idea');
+const User = require('../models/User');
 const { generateCompetitorAnalysis } = require('../utils/geminiApi');
 const logger = require('../utils/logger');
 
@@ -31,8 +32,14 @@ const analyzeCompetitors = async (req, res) => {
     // Save the analysis to the database
     idea.competitorAnalysis = analysis;
     await idea.save();
+
+    // Get updated user with current credits
+    const updatedUser = await User.findById(req.user._id);
     
-    res.json({ competitorAnalysis: analysis });
+    res.json({ 
+      competitorAnalysis: analysis,
+      userCredits: updatedUser.credits
+    });
   } catch (error) {
     logger.error('Error analyzing competitors:', error);
     res.status(500).json({ message: error.message });
@@ -49,8 +56,14 @@ const analyzeCompetitorsRandom = async (req, res) => {
     }
 
     const analysis = await generateCompetitorAnalysis(ideaText);
+
+    // Get updated user with current credits
+    const updatedUser = await User.findById(req.user._id);
     
-    res.json(analysis);
+    res.json({
+      ...analysis,
+      userCredits: updatedUser.credits
+    });
   } catch (error) {
     logger.error('Error analyzing competitors:', error);
     res.status(500).json({ message: error.message });

@@ -1,5 +1,6 @@
 // backend/controllers/pitchSimulatorController.js
 const Idea = require('../models/Idea');
+const User = require('../models/User');
 const { simulateInvestorQA } = require('../utils/geminiApi');
 const logger = require('../utils/logger');
 
@@ -32,8 +33,14 @@ const simulatePitch = async (req, res) => {
       };
       await idea.save();
     }
+
+    // Get updated user with current credits
+    const updatedUser = await User.findById(req.user._id);
     
-    res.json(idea);
+    res.json({
+      ...idea.toObject(),
+      userCredits: updatedUser.credits
+    });
   } catch (error) {
     logger.error('Error simulating pitch:', error);
     res.status(500).json({ message: error.message });
@@ -104,8 +111,14 @@ const simulatePitchRandom = async (req, res) => {
     }
 
     const questions = await simulateInvestorQA(pitch);
+
+    // Get updated user with current credits
+    const updatedUser = await User.findById(req.user._id);
     
-    res.json(questions);
+    res.json({
+      ...questions,
+      userCredits: updatedUser.credits
+    });
   } catch (error) {
     logger.error('Error simulating pitch:', error);
     res.status(500).json({ message: error.message });

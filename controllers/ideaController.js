@@ -33,7 +33,13 @@ const submitStartupIdea = async (req, res) => {
       { $push: { savedIdeas: idea._id } }
     );
 
-    res.status(201).json(idea);
+    // Get updated user with current credits
+    const updatedUser = await User.findById(req.user._id);
+
+    res.status(201).json({
+      ...idea.toObject(),
+      userCredits: updatedUser.credits
+    });
   } catch (error) {
     console.error('Error submitting idea:', error);
     res.status(500).json({ message: error.message });

@@ -1,8 +1,8 @@
 const express = require('express');
 const dotenv = require('dotenv');
 const cors = require('cors');
-const morgan = require('morgan');
 const connectDB = require('./config/db');
+const morgan = require('morgan');
 const { apiLimiter, authLimiter } = require('./middleware/rateLimiter');
 const { sanitizeInput } = require('./middleware/sanitizer');
 const logger = require('./utils/logger');
@@ -10,8 +10,6 @@ const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 // ✅ Load environment variables
 dotenv.config();
-
-
 
 const app = express();
 
@@ -25,7 +23,6 @@ connectDB().catch(err => {
 app.use('/webhook', express.raw({ type: 'application/json' }));
 
 // Middleware
-
 const allowedOrigins = [
   'http://localhost:5173',
   'https://pitch-mint-frontend.vercel.app'
@@ -42,18 +39,15 @@ app.use(cors({
   credentials: true, // required for cookies or sessions
 }));
 
-/* app.use(cors({      origin: 'https://pitch-mint-frontend.vercel.app',
-  credentials: true, // required for cookies or sessions
- },)) */
-
- 
-
 // ✅ General middleware (after raw and CORS)
 app.use(express.json()); // Must come after raw body parsing for /webhook
 app.use(sanitizeInput);
+
+// Apply rate limiting
 app.use('/api/auth', authLimiter);
 app.use('/api', apiLimiter);
 
+// Request logger in development mode
 if (process.env.NODE_ENV === 'development') {
   app.use(morgan('dev'));
 }
@@ -85,7 +79,7 @@ app.post('/webhook', (req, res) => {
   res.status(200).json({ received: true });
 });
 
-// ✅ Routes
+// Import routes
 const authRoutes = require('./routes/authRoutes');
 const ideaRoutes = require('./routes/ideaRoutes');
 const pitchDeckRoutes = require('./routes/pitchDeckRoutes');
@@ -94,8 +88,9 @@ const investorRoutes = require('./routes/investorRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
 const competitorRoutes = require('./routes/competitorRoutes');
 const pitchSimulatorRoutes = require('./routes/pitchSimulatorRoutes');
+const creditRoutes = require('./routes/creditRoutes');
 
-
+// Mount routes
 app.use('/api/auth', authRoutes);
 app.use('/api/idea', ideaRoutes);
 app.use('/api/pitchdeck', pitchDeckRoutes);
@@ -104,6 +99,7 @@ app.use('/api/investors', investorRoutes);
 app.use('/api/payment', paymentRoutes);
 app.use('/api/competitors', competitorRoutes);
 app.use('/api/pitch-simulator', pitchSimulatorRoutes);
+app.use('/api/credits', creditRoutes);
 
 // ✅ Health check
 app.get('/', (req, res) => {

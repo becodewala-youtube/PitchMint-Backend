@@ -1,4 +1,5 @@
 const Idea = require('../models/Idea');
+const User = require('../models/User');
 const { generateCanvas } = require('../utils/geminiApi');
 const logger = require('../utils/logger');
 
@@ -25,8 +26,14 @@ const generateCanvasForIdea = async (req, res) => {
     idea.canvasContent = canvasContent;
     await idea.save();
 
+    // Get updated user with current credits
+    const updatedUser = await User.findById(req.user._id);
+
     logger.info(`Generated canvas for idea ${idea._id}`);
-    res.json(idea);
+    res.json({
+      ...idea.toObject(),
+      userCredits: updatedUser.credits
+    });
   } catch (error) {
     logger.error('Error generating canvas:', error);
     res.status(500).json({ message: 'Failed to generate canvas' });
@@ -56,8 +63,14 @@ const regenerateCanvas = async (req, res) => {
     idea.canvasContent = canvasContent;
     await idea.save();
 
+    // Get updated user with current credits
+    const updatedUser = await User.findById(req.user._id);
+
     logger.info(`Regenerated canvas for idea ${idea._id}`);
-    res.json(idea);
+    res.json({
+      ...idea.toObject(),
+      userCredits: updatedUser.credits
+    });
   } catch (error) {
     logger.error('Error regenerating canvas:', error);
     res.status(500).json({ message: 'Failed to regenerate canvas' });
