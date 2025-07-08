@@ -14,7 +14,6 @@ const generatePitchDeckForIdea = async (req, res) => {
       return res.status(404).json({ message: 'Idea not found' });
     }
 
-    // Check if the idea belongs to the user
     if (idea.userId.toString() !== req.user._id.toString()) {
       return res.status(403).json({ message: 'Not authorized to access this idea' });
     }
@@ -26,19 +25,33 @@ const generatePitchDeckForIdea = async (req, res) => {
     idea.pitchDeckContent = pitchDeckContent;
     await idea.save();
 
-    // Get updated user with current credits
-    const updatedUser = await User.findById(req.user._id);
+    // CRITICAL FIX: Deduct credits from database
+    const user = await User.findById(req.user._id);
+    if (user.credits >= 1) {
+      user.credits = Math.max(0, user.credits - 1);
+      await user.save();
+
+      // Record transaction
+      await CreditTransaction.create({
+        userId: user._id,
+        type: 'usage',
+        amount: -1,
+        description: 'Used 1 credit for pitch deck generation',
+        relatedService: 'pitch_deck'
+      });
+    }
 
     logger.info(`Generated pitch deck for idea ${idea._id}`);
     res.json({
       ...idea.toObject(),
-      userCredits: updatedUser.credits
+      userCredits: user.credits
     });
   } catch (error) {
     logger.error('Error generating pitch deck:', error);
     res.status(500).json({ message: 'Failed to generate pitch deck' });
   }
 };
+
 
 // @desc    Regenerate a pitch deck for an idea
 // @route   PUT /api/pitchdeck/:id

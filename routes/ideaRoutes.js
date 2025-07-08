@@ -7,9 +7,9 @@ const {
   deleteIdea
 } = require('../controllers/ideaController');
 const { protect } = require('../middleware/authMiddleware');
-const { checkCredits, deductCredits } = require('../middleware/creditMiddleware');
+const { checkCredits } = require('../middleware/creditMiddleware');
 
-router.post('/submit', protect, checkCredits(1), submitStartupIdea, deductCredits(1, 'idea_validation'));
+router.post('/submit', protect, checkCredits(1), submitStartupIdea);
 router.get('/saved', protect, getSavedIdeas);
 router.get('/:id', protect, getIdeaById);
 router.delete('/:id', protect, deleteIdea);

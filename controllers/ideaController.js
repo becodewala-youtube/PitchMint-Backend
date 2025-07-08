@@ -33,18 +33,32 @@ const submitStartupIdea = async (req, res) => {
       { $push: { savedIdeas: idea._id } }
     );
 
-    // Get updated user with current credits
-    const updatedUser = await User.findById(req.user._id);
+    // CRITICAL FIX: Deduct credits from database
+    const user = await User.findById(req.user._id);
+    if (user.credits >= 1) {
+      user.credits = Math.max(0, user.credits - 1);
+      await user.save();
+
+      // Record transaction
+      await CreditTransaction.create({
+        userId: user._id,
+        type: 'usage',
+        amount: -1,
+        description: 'Used 1 credit for idea validation',
+        relatedService: 'idea_validation'
+      });
+    }
 
     res.status(201).json({
       ...idea.toObject(),
-      userCredits: updatedUser.credits
+      userCredits: user.credits
     });
   } catch (error) {
     console.error('Error submitting idea:', error);
     res.status(500).json({ message: error.message });
   }
 };
+
 
 // @desc    Get idea by ID
 // @route   GET /api/idea/:id

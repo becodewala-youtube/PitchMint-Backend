@@ -112,16 +112,21 @@ const purchaseCredits = async (req, res) => {
       },
     });
 
-    res.json({
+       res.json({
       clientSecret: paymentIntent.client_secret,
+      paymentIntentId: paymentIntent.id, // ✅ send this to frontend
       plan
     });
+
   } catch (error) {
     logger.error('Purchase credits error:', error);
     res.status(500).json({ message: error.message });
   }
 };
 
+// @desc    Confirm credit purchase
+// @route   POST /api/credits/confirm-purchase
+// @access  Private
 // @desc    Confirm credit purchase
 // @route   POST /api/credits/confirm-purchase
 // @access  Private
@@ -133,11 +138,26 @@ const confirmPurchase = async (req, res) => {
       return res.status(400).json({ message: 'Payment intent ID is required' });
     }
 
-    // Retrieve payment intent from Stripe
-    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+    // DEMO MODE FIX: For demo purposes, simulate successful payment
+    // In production, you would actually process the payment through Stripe
     
-    if (paymentIntent.status !== 'succeeded') {
-      return res.status(400).json({ message: 'Payment not completed' });
+    let paymentIntent;
+    try {
+      paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+    } catch (stripeError) {
+      logger.error('Stripe payment intent retrieval failed:', stripeError);
+      return res.status(400).json({ message: 'Invalid payment intent ID' });
+    }
+
+    // DEMO MODE: Simulate payment success regardless of actual status
+    // In production, remove this and use actual Stripe payment processing
+    const isDemoMode = process.env.NODE_ENV === 'development';
+    
+    if (!isDemoMode && paymentIntent.status !== 'succeeded') {
+      return res.status(400).json({ 
+        message: 'Payment not completed',
+        status: paymentIntent.status 
+      });
     }
 
     const { userId, planId, credits } = paymentIntent.metadata;
@@ -184,17 +204,11 @@ const confirmPurchase = async (req, res) => {
     });
   } catch (error) {
     logger.error('Confirm purchase error:', error);
-    
-    // Handle specific Stripe errors
-    if (error.type === 'StripeCardError') {
-      return res.status(400).json({ message: 'Payment failed: ' + error.message });
-    } else if (error.type === 'StripeInvalidRequestError') {
-      return res.status(400).json({ message: 'Invalid payment request: ' + error.message });
-    }
-    
     res.status(500).json({ message: 'Payment processing failed. Please try again.' });
   }
 };
+
+
 
 // @desc    Get current credit balance
 // @route   GET /api/credits/balance
@@ -222,10 +236,42 @@ const getCreditBalance = async (req, res) => {
   }
 };
 
+
+
+// @desc    Simulate payment success (DEMO ONLY)
+// @route   POST /api/credits/simulate-payment-success
+// @access  Private
+const simulatePaymentSuccess = async (req, res) => {
+  try {
+    const { paymentIntentId } = req.body;
+    
+    // DEMO ONLY: This simulates Stripe marking a payment as succeeded
+    // In production, this would be handled by Stripe automatically
+    if (process.env.NODE_ENV !== 'development') {
+      return res.status(403).json({ message: 'This endpoint is only available in development' });
+    }
+
+    // For demo purposes, we'll just return success
+    // In a real implementation, you would update the payment intent status
+    logger.info(`Demo: Simulating payment success for ${paymentIntentId}`);
+    
+    res.json({ 
+      message: 'Payment simulated successfully',
+      paymentIntentId 
+    });
+  } catch (error) {
+    logger.error('Simulate payment error:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+
+
 module.exports = {
   getCreditPlans,
   getCreditHistory,
   purchaseCredits,
   confirmPurchase,
-  getCreditBalance
+  getCreditBalance,
+  simulatePaymentSuccess
 };
