@@ -16,16 +16,16 @@ const sendEmailVerification = async (email, name, token) => {
   const mailOptions = {
     from: process.env.EMAIL_FROM,
     to: email,
-    subject: 'Verify Your Email - IdeaForge',
+    subject: 'Verify Your Email - Pitchmint',
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center;">
-          <h1 style="color: white; margin: 0;">Welcome to IdeaForge!</h1>
+          <h1 style="color: white; margin: 0;">Welcome to Pitchmint!</h1>
         </div>
         <div style="padding: 30px; background: #f8f9fa;">
           <h2 style="color: #333;">Hi ${name},</h2>
           <p style="color: #666; line-height: 1.6;">
-            Thank you for signing up for IdeaForge! To complete your registration, please verify your email address using the code below:
+            Thank you for signing up for Pitchmint! To complete your registration, please verify your email address using the code below:
           </p>
           <div style="text-align: center; margin: 30px 0;">
             <div style="background: #667eea; color: white; padding: 15px 30px; border-radius: 8px; font-size: 24px; font-weight: bold; letter-spacing: 3px; display: inline-block;">
@@ -33,12 +33,12 @@ const sendEmailVerification = async (email, name, token) => {
             </div>
           </div>
           <p style="color: #666; line-height: 1.6;">
-            This code will expire in 10 minutes. If you didn't create an account with IdeaForge, please ignore this email.
+            This code will expire in 10 minutes. If you didn't create an account with , please ignore this email.
           </p>
           <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
             <p style="color: #999; font-size: 12px;">
               Best regards,<br>
-              The IdeaForge Team
+              The Pitchmint Team
             </p>
           </div>
         </div>
@@ -54,7 +54,7 @@ const sendPasswordReset = async (email, name, token) => {
   const mailOptions = {
     from: process.env.EMAIL_FROM,
     to: email,
-    subject: 'Reset Your Password - IdeaForge',
+    subject: 'Reset Your Password - Pitchmint',
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center;">
@@ -76,7 +76,7 @@ const sendPasswordReset = async (email, name, token) => {
           <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
             <p style="color: #999; font-size: 12px;">
               Best regards,<br>
-              The IdeaForge Team
+              The Pitchmint Team
             </p>
           </div>
         </div>
@@ -92,11 +92,11 @@ const sendWelcomeEmail = async (email, name) => {
   const mailOptions = {
     from: process.env.EMAIL_FROM,
     to: email,
-    subject: 'Welcome to IdeaForge!',
+    subject: 'Welcome to Pitchmint!',
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center;">
-          <h1 style="color: white; margin: 0;">Welcome to IdeaForge!</h1>
+          <h1 style="color: white; margin: 0;">Welcome to Pitchmint!</h1>
         </div>
         <div style="padding: 30px; background: #f8f9fa;">
           <h2 style="color: #333;">Hi ${name},</h2>
@@ -114,7 +114,7 @@ const sendWelcomeEmail = async (email, name) => {
           <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
             <p style="color: #999; font-size: 12px;">
               Best regards,<br>
-              The IdeaForge Team
+              The Pitchmint Team
             </p>
           </div>
         </div>
