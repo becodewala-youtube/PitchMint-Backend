@@ -1,6 +1,8 @@
 const Idea = require('../models/Idea');
 const User = require('../models/User');
 const { validateIdea } = require('../utils/geminiApi');
+const CreditTransaction = require('../models/CreditTransaction');
+
 
 // @desc    Submit a new startup idea
 // @route   POST /api/idea/submit

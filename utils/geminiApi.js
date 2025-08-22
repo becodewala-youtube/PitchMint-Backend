@@ -330,7 +330,11 @@ const simulateInvestorQA = async (pitch, question = null, answer = null) => {
     const jsonMatch = textResponse.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       throw new Error('Failed to parse AI response');
+
     }
+
+    
+
     
     return JSON.parse(jsonMatch[0]);
   } catch (error) {

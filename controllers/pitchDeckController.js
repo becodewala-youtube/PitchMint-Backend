@@ -2,6 +2,7 @@ const Idea = require('../models/Idea');
 const User = require('../models/User');
 const { generatePitchDeck } = require('../utils/geminiApi');
 const logger = require('../utils/logger');
+const CreditTransaction = require('../models/CreditTransaction');
 
 // @desc    Generate a pitch deck for an idea
 // @route   POST /api/pitchdeck/:id
