@@ -96,26 +96,38 @@ const purchaseCredits = async (req, res) => {
       await user.save();
     }
 
-    // Create payment intent
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: plan.price,
+    // Create Stripe checkout session
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          price_data: {
+            currency: 'usd',
+            product_data: {
+              name: plan.name,
+              description: plan.description,
+            },
+            unit_amount: plan.price,
+          },
+          quantity: 1,
+        },
+      ],
+      mode: 'payment',
       currency: 'usd',
       customer: customerId,
+      success_url: `${process.env.FRONTEND_URL}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.FRONTEND_URL}/credits`,
       metadata: {
-        userId: user._id.toString(),
-        planId,
-        credits: plan.credits.toString()
-      },
-      description: `${plan.name} - ${plan.credits} credits`,
-      automatic_payment_methods: {
-        enabled: true,
-      },
+  userId: user._id.toString(),
+  planId,
+  credits: plan.credits.toString(),
+  type: 'credit_purchase'  
+},
     });
 
-       res.json({
-      clientSecret: paymentIntent.client_secret,
-      paymentIntentId: paymentIntent.id, // ✅ send this to frontend
-      plan
+    res.json({
+      url: session.url,
+      sessionId: session.id
     });
 
   } catch (error) {
@@ -132,35 +144,28 @@ const purchaseCredits = async (req, res) => {
 // @access  Private
 const confirmPurchase = async (req, res) => {
   try {
-    const { paymentIntentId } = req.body;
+    const { sessionId } = req.body;
     
-    if (!paymentIntentId) {
-      return res.status(400).json({ message: 'Payment intent ID is required' });
+    if (!sessionId) {
+      return res.status(400).json({ message: 'Session ID is required' });
     }
 
-    // DEMO MODE FIX: For demo purposes, simulate successful payment
-    // In production, you would actually process the payment through Stripe
-    
-    let paymentIntent;
+    let session;
     try {
-      paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+      session = await stripe.checkout.sessions.retrieve(sessionId);
     } catch (stripeError) {
-      logger.error('Stripe payment intent retrieval failed:', stripeError);
-      return res.status(400).json({ message: 'Invalid payment intent ID' });
+      logger.error('Stripe session retrieval failed:', stripeError);
+      return res.status(400).json({ message: 'Invalid session ID' });
     }
 
-    // DEMO MODE: Simulate payment success regardless of actual status
-    // In production, remove this and use actual Stripe payment processing
-    const isDemoMode = process.env.NODE_ENV === 'development';
-    
-    if (!isDemoMode && paymentIntent.status !== 'succeeded') {
+    if (session.payment_status !== 'paid') {
       return res.status(400).json({ 
         message: 'Payment not completed',
-        status: paymentIntent.status 
+        status: session.payment_status 
       });
     }
 
-    const { userId, planId, credits } = paymentIntent.metadata;
+    const { userId, planId, credits } = session.metadata;
     
     if (userId !== req.user._id.toString()) {
       return res.status(403).json({ message: 'Unauthorized' });
@@ -175,7 +180,7 @@ const confirmPurchase = async (req, res) => {
 
     // Check if this payment has already been processed
     const existingTransaction = await CreditTransaction.findOne({
-      stripePaymentIntentId: paymentIntentId
+      stripePaymentIntentId: sessionId
     });
 
     if (existingTransaction) {
@@ -192,7 +197,7 @@ const confirmPurchase = async (req, res) => {
       type: 'purchase',
       amount: parseInt(credits),
       description: `Purchased ${plan.name}`,
-      stripePaymentIntentId: paymentIntentId
+      stripePaymentIntentId: sessionId
     });
 
     logger.info(`User ${user._id} purchased ${credits} credits`);

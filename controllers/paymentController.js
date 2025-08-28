@@ -54,30 +54,54 @@ const handlePaymentSuccess = async (req, res) => {
     }
 
     // Handle the checkout.session.completed event
-    if (event.type === 'checkout.session.completed') {
-      const session = event.data.object;
-      
-      // Extract the user ID from metadata
-      const userId = session.metadata.userId;
-      
-      try {
-        // Update user to premium
-        const updatedUser = await User.findByIdAndUpdate(
-          userId,
-          { isPremium: true },
-          { new: true }
-        );
-
-        if (!updatedUser) {
-          throw new Error('User not found');
-        }
-
-        logger.info(`User ${userId} upgraded to premium successfully`);
-      } catch (error) {
-        logger.error('Error updating user premium status:', error);
-        return res.status(500).json({ message: 'Failed to update user status' });
+   // Replace the webhook logic with:
+if (event.type === 'checkout.session.completed') {
+  const session = event.data.object;
+  const { userId, type, planId, credits } = session.metadata;
+  
+  try {
+    if (type === 'credit_purchase') {
+      const user = await User.findById(userId);
+      if (!user) {
+        throw new Error('User not found');
       }
+      
+      // Check for duplicate processing
+      const CreditTransaction = require('../models/CreditTransaction');
+      const existingTransaction = await CreditTransaction.findOne({
+        stripePaymentIntentId: session.id
+      });
+
+      if (!existingTransaction) {
+        // Add credits to user account
+        user.credits += parseInt(credits);
+        await user.save();
+        
+        // Record transaction
+        await CreditTransaction.create({
+          userId: user._id,
+          type: 'purchase',
+          amount: parseInt(credits),
+          description: `Purchased ${credits} credits`,
+          stripePaymentIntentId: session.id
+        });
+        
+        logger.info(`User ${userId} purchased ${credits} credits via webhook`);
+      }
+    } else {
+      // Handle premium upgrade
+      const updatedUser = await User.findByIdAndUpdate(
+        userId,
+        { isPremium: true },
+        { new: true }
+      );
+      logger.info(`User ${userId} upgraded to premium via webhook`);
     }
+  } catch (error) {
+    logger.error('Error processing payment:', error);
+    return res.status(500).json({ message: 'Failed to update user status' });
+  }
+}
 
     res.json({ received: true });
   } catch (error) {
@@ -91,27 +115,69 @@ const verifyPaymentSession = async (req, res) => {
     const { sessionId } = req.params;
     const session = await stripe.checkout.sessions.retrieve(sessionId);
 
-    if (session.payment_status === 'paid') {
-      const userId = session.metadata.userId;
+    // Replace the existing logic with:
+if (session.payment_status === 'paid') {
+  const { userId, type, planId, credits } = session.metadata;
+  
+  if (userId !== req.user._id.toString()) {
+    return res.status(403).json({ message: 'Unauthorized' });
+  }
 
-      // Get and update user
-      const user = await User.findById(userId);
-      if (!user) {
-        return res.status(404).json({ message: 'User not found' });
-      }
+  const user = await User.findById(userId);
+  if (!user) {
+    return res.status(404).json({ message: 'User not found' });
+  }
 
-      user.isPremium = true; // ✅ Set isPremium to true
-      await user.save();     // ✅ Save the updated user
+  if (type === 'credit_purchase') {
+    // Check for duplicate processing
+    const CreditTransaction = require('../models/CreditTransaction');
+    const existingTransaction = await CreditTransaction.findOne({
+      stripePaymentIntentId: sessionId
+    });
 
-      res.json({
-        success: true,
-        user: {
-          _id: user._id,
-          name: user.name,
-          email: user.email,
-          isPremium: user.isPremium
-        }
+    if (!existingTransaction) {
+      // Add credits to user account
+      user.credits += parseInt(credits);
+      await user.save();
+
+      // Record transaction
+      await CreditTransaction.create({
+        userId: user._id,
+        type: 'purchase',
+        amount: parseInt(credits),
+        description: `Purchased ${credits} credits`,
+        stripePaymentIntentId: sessionId
       });
+    }
+
+    res.json({
+      success: true,
+      type: 'credit_purchase',
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        credits: user.credits
+      }
+    });
+  } else {
+    // Handle premium upgrade
+    user.isPremium = true;
+    await user.save();
+
+    res.json({
+      success: true,
+      type: 'premium_upgrade',
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        isPremium: user.isPremium
+      }
+    });
+  }
+
+
 
       console.log('User updated to premium:', user);
     } else {

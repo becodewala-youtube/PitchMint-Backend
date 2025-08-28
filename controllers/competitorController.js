@@ -1,6 +1,7 @@
 // backend/controllers/competitorController.js
 const Idea = require('../models/Idea');
 const User = require('../models/User');
+const CreditTransaction = require('../models/CreditTransaction');
 const { generateCompetitorAnalysis } = require('../utils/geminiApi');
 const logger = require('../utils/logger');
 
@@ -26,6 +27,16 @@ const analyzeCompetitors = async (req, res) => {
       return res.json({ competitorAnalysis: idea.competitorAnalysis });
     }
 
+    // Check user credits before proceeding
+    const user = await User.findById(req.user._id);
+    if (user.credits < 1) {
+      return res.status(402).json({ 
+        message: 'Insufficient credits',
+        creditsRequired: 1,
+        creditsAvailable: user.credits
+      });
+    }
+
     // Generate new analysis
     const analysis = await generateCompetitorAnalysis(idea.ideaText);
     
@@ -33,12 +44,22 @@ const analyzeCompetitors = async (req, res) => {
     idea.competitorAnalysis = analysis;
     await idea.save();
 
-    // Get updated user with current credits
-    const updatedUser = await User.findById(req.user._id);
+    // Deduct credits from database
+    user.credits = Math.max(0, user.credits - 1);
+    await user.save();
+
+    // Record transaction
+    await CreditTransaction.create({
+      userId: user._id,
+      type: 'usage',
+      amount: -1,
+      description: 'Used 1 credit for competitor analysis',
+      relatedService: 'competitor_analysis'
+    });
     
     res.json({ 
       competitorAnalysis: analysis,
-      userCredits: updatedUser.credits
+      userCredits: user.credits
     });
   } catch (error) {
     logger.error('Error analyzing competitors:', error);
@@ -57,12 +78,25 @@ const analyzeCompetitorsRandom = async (req, res) => {
 
     const analysis = await generateCompetitorAnalysis(ideaText);
 
-    // Get updated user with current credits
-    const updatedUser = await User.findById(req.user._id);
+    // CRITICAL FIX: Deduct credits from database
+    const user = await User.findById(req.user._id);
+    if (user.credits >= 1) {
+      user.credits = Math.max(0, user.credits - 1);
+      await user.save();
+
+      // Record transaction
+      await CreditTransaction.create({
+        userId: user._id,
+        type: 'usage',
+        amount: -1,
+        description: 'Used 1 credit for competitor analysis',
+        relatedService: 'competitor_analysis'
+      });
+    }
     
     res.json({
       ...analysis,
-      userCredits: updatedUser.credits
+      userCredits: user.credits
     });
   } catch (error) {
     logger.error('Error analyzing competitors:', error);

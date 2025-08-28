@@ -14,6 +14,7 @@ router.get('/plans', protect, getCreditPlans);
 router.get('/history', protect, getCreditHistory);
 router.get('/balance', protect, getCreditBalance);
 router.post('/purchase', protect, purchaseCredits);
+router.post('/create-checkout-session', protect, purchaseCredits); // Add alias for backward compatibility
 router.post('/confirm-purchase', protect, confirmPurchase);
 router.post('/simulate-payment-success', protect, simulatePaymentSuccess);  // Add this
 

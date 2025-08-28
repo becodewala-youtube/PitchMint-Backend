@@ -1,62 +1,89 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const JSON5 = require('json5');
 
 // Initialize the Gemini API
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
+function safeJsonParse(text) {
+  try {
+    let cleaned = text.replace(/```json|```/g, "").trim();
+    const firstBrace = cleaned.indexOf('{');
+    const lastBrace = cleaned.lastIndexOf('}');
+    if (firstBrace === -1 || lastBrace === -1) throw new Error("No valid JSON object found");
+
+    cleaned = cleaned.slice(firstBrace, lastBrace + 1);
+
+    try {
+      return JSON.parse(cleaned); // try strict JSON first
+    } catch {
+      return JSON5.parse(cleaned); // fallback for ' and trailing commas
+    }
+  } catch (err) {
+    console.error("❌ JSON parse failed:", err.message);
+    console.error("⚠️ Raw snippet:", text.slice(0, 500));
+    throw new Error("Invalid JSON returned from Gemini");
+  }
+}
+
 // Function to validate an idea
 const validateIdea = async (ideaText) => {
   try {
     const prompt = `
-      Validate the startup idea: "${ideaText}"
-      
-      Analyze the following aspects:
-      
-      1. Market Demand: Evaluate the potential market demand, size, and growth for this idea. Consider if there's a real problem being solved and if there's a target audience willing to pay for the solution.
-      
-      2. Competition: Assess the competitive landscape. How crowded is the market? Are there established players? What are the barriers to entry?
-      
-      3. Monetization Potential: Evaluate the potential business models and revenue streams. How feasible is it to make money with this idea?
-      
-      For each aspect, provide:
-      - A percentage score (0-100)
-      - A brief 3-line analysis explaining the reasoning
-      
-      Finally, provide an overall assessment with an overall score (0-100) and a short conclusion.
-      
-      Format your response as a JSON object with this structure:
-      {
-        "marketDemand": {
-          "score": 85,
-          "text": "Your analysis here..."
-        },
-        "competition": {
-          "score": 70,
-          "text": "Your analysis here..."
-        },
-        "monetization": {
-          "score": 75,
-          "text": "Your analysis here..."
-        },
-        "overall": {
-          "score": 77,
-          "text": "Your final assessment here..."
-        }
-      }
+You are an expert startup advisor and venture capitalist. Analyze this startup idea comprehensively:
+
+STARTUP IDEA: "${ideaText}"
+
+Provide a detailed analysis covering:
+
+1. MARKET DEMAND (0-100): Assess market size, customer pain points, willingness to pay, and growth potential
+2. COMPETITION (0-100): Evaluate competitive landscape, market saturation, and barriers to entry  
+3. MONETIZATION (0-100): Analyze revenue potential, business model viability, and scalability
+
+For each category, provide:
+- A numerical score (0-100)
+- A detailed 2-3 sentence analysis explaining your reasoning
+
+Calculate an overall score as the average of the three categories.
+
+CRITICAL: Return ONLY a valid JSON object with this exact structure:
+
+{
+  "marketDemand": {
+    "score": 85,
+    "text": "Your detailed analysis here explaining market demand factors."
+  },
+  "competition": {
+    "score": 70,
+    "text": "Your detailed analysis here explaining competitive landscape."
+  },
+  "monetization": {
+    "score": 75,
+    "text": "Your detailed analysis here explaining monetization potential."
+  },
+  "overall": {
+    "score": 77,
+    "text": "Your overall assessment and recommendation."
+  }
+}
+
+Return only the JSON object. No markdown, no explanations, no additional text.
     `;
 
     const result = await model.generateContent(prompt);
     const response = await result.response;
     const textResponse = response.text();
     
-    // Extract the JSON from the response
-    const jsonMatch = textResponse.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error('Failed to parse AI response');
-    }
+    // Parse the JSON data using safe parser
+    const analysisData = safeJsonParse(textResponse);
     
-    // Parse the JSON data
-    const analysisData = JSON.parse(jsonMatch[0]);
+    // Validate required structure
+    const requiredFields = ['marketDemand', 'competition', 'monetization', 'overall'];
+    for (const field of requiredFields) {
+      if (!analysisData[field] || typeof analysisData[field].score !== 'number' || !analysisData[field].text) {
+        throw new Error(`Invalid response structure: missing or invalid ${field}`);
+      }
+    }
     
     return {
       marketDemandScore: analysisData.marketDemand.score,
@@ -92,43 +119,42 @@ const validateIdea = async (ideaText) => {
 const generatePitchDeck = async (ideaText, analysis) => {
   try {
     const prompt = `
-      Generate a comprehensive investor pitch deck for the startup idea: "${ideaText}"
-      
-      Based on this analysis:
-      Market Demand: ${analysis.marketDemand.text}
-      Competition: ${analysis.competition.text}
-      Monetization: ${analysis.monetization.text}
-      Overall Assessment: ${analysis.overall.text}
-      
-      Create detailed content for each pitch deck section. Format the response as a JSON object with these exact keys:
-      {
-        "problem": "Detailed description of the problem",
-        "solution": "Comprehensive explanation of the solution",
-        "marketSize": "TAM, SAM, and SOM analysis",
-        "businessModel": "Revenue streams and pricing strategy",
-        "competitors": "Competitive analysis and advantages",
-        "goToMarket": "Marketing and customer acquisition strategy",
-        "team": "Ideal team structure and roles",
-        "financials": "3-year financial projections",
-        "milestones": "18-month roadmap",
-        "askAndUse": "Investment requirements and allocation"
-      }
+You are an expert pitch deck consultant. Create comprehensive investor pitch deck content for this startup:
 
-      Important: Each value must be a single string, not an array.
+STARTUP IDEA: "${ideaText}"
+
+ANALYSIS CONTEXT:
+- Market Demand: ${analysis.marketDemand.text}
+- Competition: ${analysis.competition.text}
+- Monetization: ${analysis.monetization.text}
+- Overall: ${analysis.overall.text}
+
+Generate detailed, investor-ready content for each section. Make it compelling and data-driven.
+
+CRITICAL: Return ONLY a valid JSON object with this exact structure:
+
+{
+  "problem": "Detailed problem statement with market pain points and customer frustrations",
+  "solution": "Comprehensive solution description with key features and benefits",
+  "marketSize": "TAM, SAM, SOM analysis with specific numbers and market research",
+  "businessModel": "Revenue streams, pricing strategy, and unit economics",
+  "competitors": "Competitive landscape analysis and competitive advantages",
+  "goToMarket": "Customer acquisition strategy, marketing channels, and growth plan",
+  "team": "Ideal team structure, key roles, and expertise requirements",
+  "financials": "3-year revenue projections, key metrics, and financial assumptions",
+  "milestones": "18-month roadmap with specific goals and timelines",
+  "askAndUse": "Investment amount needed and detailed fund allocation"
+}
+
+Each section should be 3-4 sentences minimum. Return only the JSON object.
     `;
 
     const result = await model.generateContent(prompt);
     const response = await result.response;
     const textResponse = response.text();
     
-    // Extract the JSON from the response
-    const jsonMatch = textResponse.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error('Failed to parse AI response');
-    }
-    
     // Parse and validate the JSON data
-    const pitchDeckData = JSON.parse(jsonMatch[0]);
+    const pitchDeckData = safeJsonParse(textResponse);
     
     // Ensure all required sections are present and are strings
     const requiredSections = [
@@ -157,42 +183,40 @@ const generatePitchDeck = async (ideaText, analysis) => {
 const generateCanvas = async (ideaText, analysis) => {
   try {
     const prompt = `
-      Generate a Lean Business Model Canvas for the startup idea: "${ideaText}"
-      
-      Based on this analysis:
-      Market Demand: ${analysis.marketDemand.text}
-      Competition: ${analysis.competition.text}
-      Monetization: ${analysis.monetization.text}
-      Overall Assessment: ${analysis.overall.text}
-      
-      Create detailed content for each canvas section. Format the response as a JSON object with these exact keys:
-      {
-        "problem": "Top 1-3 customer problems",
-        "solution": "Key solution features",
-        "keyMetrics": "Key performance indicators",
-        "uniqueValueProposition": "Core value proposition",
-        "channels": "Path to customers",
-        "customerSegments": "Target customer segments",
-        "costStructure": "Major cost components",
-        "revenueStreams": "Revenue sources",
-        "unfairAdvantage": "Competitive advantages"
-      }
+You are a lean startup methodology expert. Create a comprehensive Business Model Canvas for this startup:
 
-      Important: Each value must be a single string, not an array. If you have multiple points, combine them into a single string with line breaks.
+STARTUP IDEA: "${ideaText}"
+
+ANALYSIS CONTEXT:
+- Market Demand: ${analysis.marketDemand.text}
+- Competition: ${analysis.competition.text}
+- Monetization: ${analysis.monetization.text}
+
+Generate detailed content for each canvas building block based on lean startup principles.
+
+CRITICAL: Return ONLY a valid JSON object with this exact structure:
+
+{
+  "problem": "Top 1-3 customer problems that your solution addresses",
+  "solution": "Key solution features and how they solve the problems",
+  "keyMetrics": "Key performance indicators to track success and growth",
+  "uniqueValueProposition": "Clear value proposition that differentiates from competitors",
+  "channels": "Customer acquisition channels and distribution strategy",
+  "customerSegments": "Specific target customer segments and personas",
+  "costStructure": "Major cost components and operational expenses",
+  "revenueStreams": "Revenue sources and monetization strategies",
+  "unfairAdvantage": "Competitive moats and sustainable advantages"
+}
+
+Each section should be detailed and actionable. Return only the JSON object.
     `;
 
     const result = await model.generateContent(prompt);
     const response = await result.response;
     const textResponse = response.text();
     
-    // Extract the JSON from the response
-    const jsonMatch = textResponse.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error('Failed to parse AI response');
-    }
-    
     // Parse and validate the JSON data
-    const canvasData = JSON.parse(jsonMatch[0]);
+    const canvasData = safeJsonParse(textResponse);
     
     // Ensure all required sections are present and are strings
     const requiredSections = [
@@ -217,63 +241,61 @@ const generateCanvas = async (ideaText, analysis) => {
   }
 };
 
-
-// Add new functions for competitor analysis and pitch simulation
+// Function to generate competitor analysis
 const generateCompetitorAnalysis = async (ideaText) => {
   try {
     const prompt = `
-You are a startup strategist. Analyze potential competitors for the startup idea below.
+You are a market research expert. Analyze the competitive landscape for this startup idea:
 
-Startup Idea: "${ideaText}"
+STARTUP IDEA: "${ideaText}"
 
-Provide a JSON object ONLY in the following structure:
+Identify 3-4 main competitors (direct and indirect) and provide a comprehensive SWOT analysis for each.
+
+CRITICAL: Return ONLY a valid JSON object with this exact structure:
 
 {
   "competitors": [
     {
       "name": "Competitor Name",
-      "description": "Brief description",
+      "description": "Brief description of what they do and their market position",
       "swot": {
-        "strengths": ["Strength 1", "Strength 2"],
-        "weaknesses": ["Weakness 1", "Weakness 2"],
+        "strengths": ["Strength 1", "Strength 2", "Strength 3"],
+        "weaknesses": ["Weakness 1", "Weakness 2", "Weakness 3"],
         "opportunities": ["Opportunity 1", "Opportunity 2"],
         "threats": ["Threat 1", "Threat 2"]
       }
     }
   ],
-  "summary": "Overall competitive landscape analysis."
+  "summary": "Overall competitive landscape analysis and market positioning insights"
 }
 
-Return only the JSON. Do not include markdown, commentary, or explanations.
-`;
+Include both direct competitors and indirect alternatives. Return only the JSON object.
+    `;
 
     const result = await model.generateContent(prompt);
     const response = await result.response;
     const textResponse = response.text();
 
-    // Extract only the JSON object from the text response
-    const jsonStart = textResponse.indexOf('{');
-    const jsonEnd = textResponse.lastIndexOf('}');
+    // Parse the JSON data using safe parser
+    const competitorData = safeJsonParse(textResponse);
     
-    if (jsonStart === -1 || jsonEnd === -1) {
-      throw new Error('No valid JSON object found in Gemini response.');
+    // Validate structure
+    if (!competitorData.competitors || !Array.isArray(competitorData.competitors)) {
+      throw new Error('Invalid competitors data structure');
+    }
+    
+    if (!competitorData.summary) {
+      throw new Error('Missing summary in competitor analysis');
     }
 
-    const jsonString = textResponse.slice(jsonStart, jsonEnd + 1);
-
-    try {
-      return JSON.parse(jsonString);
-    } catch (parseErr) {
-      console.error('❌ JSON parse error:', parseErr.message);
-      console.error('⚠️ Raw JSON fragment:', jsonString.slice(0, 500)); // print first 500 chars
-      throw new Error('Invalid JSON format from Gemini.');
-    }
+    return competitorData;
   } catch (error) {
     console.error('Error generating competitor analysis:', error);
     throw new Error('Failed to analyze competitors');
   }
 };
 
+// Function to simulate investor Q&A
 const simulateInvestorQA = async (pitch, question = null, answer = null) => {
   try {
     let prompt;
@@ -281,45 +303,59 @@ const simulateInvestorQA = async (pitch, question = null, answer = null) => {
     if (!question && !answer) {
       // Generate initial questions
       prompt = `
-        As an experienced venture capitalist, review this startup pitch:
-        "${pitch}"
-        
-        Generate 5 critical questions that an investor would ask. Focus on:
-        - Market size and opportunity
-        - Business model and revenue
-        - Competition and differentiation
-        - Growth strategy
-        - Team and execution
-        
-        Format your response as a JSON array of questions:
-        {
-          "questions": [
-            {
-              "id": "1",
-              "question": "Question text",
-              "category": "Category (e.g., Market, Revenue, etc.)"
-            }
-          ]
-        }
+You are an experienced venture capitalist conducting due diligence. Review this startup pitch:
+
+PITCH: "${pitch}"
+
+Generate 5 critical questions that investors typically ask during pitch presentations. Focus on:
+- Market opportunity and validation
+- Business model and revenue potential
+- Competitive differentiation
+- Growth strategy and scalability
+- Team and execution capability
+
+CRITICAL: Return ONLY a valid JSON object with this exact structure:
+
+{
+  "questions": [
+    {
+      "id": "1",
+      "question": "Specific investor question text",
+      "category": "Market"
+    },
+    {
+      "id": "2", 
+      "question": "Another specific investor question",
+      "category": "Revenue"
+    }
+  ]
+}
+
+Categories should be: Market, Revenue, Competition, Growth, Team. Return only the JSON object.
       `;
     } else {
       // Evaluate the answer
       prompt = `
-        As an experienced venture capitalist, evaluate this response:
-        
-        Pitch: "${pitch}"
-        Question: "${question}"
-        Answer: "${answer}"
-        
-        Provide feedback on the answer's effectiveness. Format response as:
-        {
-          "feedback": {
-            "rating": 1-5 score,
-            "strengths": ["Strength 1", "Strength 2"],
-            "improvements": ["Improvement 1", "Improvement 2"],
-            "additionalAdvice": "Overall advice"
-          }
-        }
+You are an experienced venture capitalist evaluating a founder's response during a pitch meeting.
+
+STARTUP PITCH: "${pitch}"
+INVESTOR QUESTION: "${question}"
+FOUNDER'S ANSWER: "${answer}"
+
+Evaluate the quality and effectiveness of this response from an investor's perspective.
+
+CRITICAL: Return ONLY a valid JSON object with this exact structure:
+
+{
+  "feedback": {
+    "rating": 4,
+    "strengths": ["Strength 1", "Strength 2"],
+    "improvements": ["Improvement 1", "Improvement 2"],
+    "additionalAdvice": "Overall advice for improving the pitch"
+  }
+}
+
+Rating should be 1-5. Provide 2-3 strengths and improvements each. Return only the JSON object.
       `;
     }
 
@@ -327,16 +363,10 @@ const simulateInvestorQA = async (pitch, question = null, answer = null) => {
     const response = await result.response;
     const textResponse = response.text();
     
-    const jsonMatch = textResponse.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error('Failed to parse AI response');
-
-    }
-
+    // Parse the JSON data using safe parser
+    const qaData = safeJsonParse(textResponse);
     
-
-    
-    return JSON.parse(jsonMatch[0]);
+    return qaData;
   } catch (error) {
     console.error('Error in pitch simulation:', error);
     throw new Error('Failed to process pitch simulation');

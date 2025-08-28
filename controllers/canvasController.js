@@ -1,5 +1,6 @@
 const Idea = require('../models/Idea');
 const User = require('../models/User');
+const CreditTransaction = require('../models/CreditTransaction');
 const { generateCanvas } = require('../utils/geminiApi');
 const logger = require('../utils/logger');
 
@@ -26,13 +27,26 @@ const generateCanvasForIdea = async (req, res) => {
     idea.canvasContent = canvasContent;
     await idea.save();
 
-    // Get updated user with current credits
-    const updatedUser = await User.findById(req.user._id);
+    // CRITICAL FIX: Deduct credits from database
+    const user = await User.findById(req.user._id);
+    if (user.credits >= 1) {
+      user.credits = Math.max(0, user.credits - 1);
+      await user.save();
+
+      // Record transaction
+      await CreditTransaction.create({
+        userId: user._id,
+        type: 'usage',
+        amount: -1,
+        description: 'Used 1 credit for canvas generation',
+        relatedService: 'canvas'
+      });
+    }
 
     logger.info(`Generated canvas for idea ${idea._id}`);
     res.json({
       ...idea.toObject(),
-      userCredits: updatedUser.credits
+      userCredits: user.credits
     });
   } catch (error) {
     logger.error('Error generating canvas:', error);
@@ -63,13 +77,26 @@ const regenerateCanvas = async (req, res) => {
     idea.canvasContent = canvasContent;
     await idea.save();
 
-    // Get updated user with current credits
-    const updatedUser = await User.findById(req.user._id);
+    // CRITICAL FIX: Deduct credits from database
+    const user = await User.findById(req.user._id);
+    if (user.credits >= 1) {
+      user.credits = Math.max(0, user.credits - 1);
+      await user.save();
+
+      // Record transaction
+      await CreditTransaction.create({
+        userId: user._id,
+        type: 'usage',
+        amount: -1,
+        description: 'Used 1 credit for canvas regeneration',
+        relatedService: 'canvas'
+      });
+    }
 
     logger.info(`Regenerated canvas for idea ${idea._id}`);
     res.json({
       ...idea.toObject(),
-      userCredits: updatedUser.credits
+      userCredits: user.credits
     });
   } catch (error) {
     logger.error('Error regenerating canvas:', error);

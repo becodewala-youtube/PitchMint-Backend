@@ -25,8 +25,8 @@ const checkCredits = (requiredCredits = 1) => {
         });
       }
 
-      // Store the updated user in req for next middleware
-      req.user = user;
+      // Store the fresh user data in req for next middleware
+      req.user = await User.findById(req.user._id);
       next();
     } catch (error) {
       console.error('Credit check error:', error);
