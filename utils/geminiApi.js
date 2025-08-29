@@ -1,5 +1,4 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
-const JSON5 = require('json5');
 
 // Initialize the Gemini API
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
@@ -7,24 +6,31 @@ const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
 function safeJsonParse(text) {
   try {
+    // Remove markdown code fences
     let cleaned = text.replace(/```json|```/g, "").trim();
-    const firstBrace = cleaned.indexOf('{');
-    const lastBrace = cleaned.lastIndexOf('}');
-    if (firstBrace === -1 || lastBrace === -1) throw new Error("No valid JSON object found");
 
+    // Extract only the JSON portion
+    const firstBrace = cleaned.indexOf("{");
+    const lastBrace = cleaned.lastIndexOf("}");
+    if (firstBrace === -1 || lastBrace === -1) {
+      throw new Error("No valid JSON object found");
+    }
     cleaned = cleaned.slice(firstBrace, lastBrace + 1);
 
-    try {
-      return JSON.parse(cleaned); // try strict JSON first
-    } catch {
-      return JSON5.parse(cleaned); // fallback for ' and trailing commas
-    }
+    // Normalize quotes (smart → normal)
+    cleaned = cleaned.replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"');
+
+    // Remove trailing commas
+    cleaned = cleaned.replace(/,(\s*[}\]])/g, "$1");
+
+    return JSON.parse(cleaned);
   } catch (err) {
     console.error("❌ JSON parse failed:", err.message);
-    console.error("⚠️ Raw snippet:", text.slice(0, 500));
+    console.error("⚠️ Raw snippet:", text.slice(0, 300));
     throw new Error("Invalid JSON returned from Gemini");
   }
 }
+
 
 // Function to validate an idea
 const validateIdea = async (ideaText) => {
@@ -136,12 +142,12 @@ CRITICAL: Return ONLY a valid JSON object with this exact structure:
 {
   "problem": "Detailed problem statement with market pain points and customer frustrations",
   "solution": "Comprehensive solution description with key features and benefits",
-  "marketSize": "TAM, SAM, SOM analysis with specific numbers and market research",
-  "businessModel": "Revenue streams, pricing strategy, and unit economics",
+  "marketSize": "TAM SAM SOM analysis with specific numbers and market research",
+  "businessModel": "Revenue streams pricing strategy and unit economics",
   "competitors": "Competitive landscape analysis and competitive advantages",
-  "goToMarket": "Customer acquisition strategy, marketing channels, and growth plan",
-  "team": "Ideal team structure, key roles, and expertise requirements",
-  "financials": "3-year revenue projections, key metrics, and financial assumptions",
+  "goToMarket": "Customer acquisition strategy marketing channels and growth plan",
+  "team": "Ideal team structure key roles and expertise requirements",
+  "financials": "3-year revenue projections key metrics and financial assumptions",
   "milestones": "18-month roadmap with specific goals and timelines",
   "askAndUse": "Investment amount needed and detailed fund allocation"
 }
@@ -373,10 +379,216 @@ Rating should be 1-5. Provide 2-3 strengths and improvements each. Return only t
   }
 };
 
+// Function to generate comprehensive market research
+const generateMarketResearch = async (ideaText, industry, targetRegion) => {
+  try {
+    const prompt = `
+You are a market research expert. Analyze the market for this startup idea:
+
+STARTUP IDEA: "${ideaText}"
+INDUSTRY: "${industry}"
+TARGET REGION: "${targetRegion}"
+
+Provide comprehensive market analysis including TAM/SAM/SOM, trends, personas, and competitor activity.
+
+CRITICAL: Return ONLY a valid JSON object with this exact structure:
+
+{
+  "tam": {
+    "value": 50000000000,
+    "description": "Total addressable market analysis with specific market size reasoning",
+    "sources": ["Industry report 1", "Market research 2"]
+  },
+  "sam": {
+    "value": 5000000000,
+    "description": "Serviceable addressable market analysis with geographic and demographic constraints",
+    "methodology": "How SAM was calculated from TAM"
+  },
+  "som": {
+    "value": 100000000,
+    "description": "Serviceable obtainable market analysis with realistic capture assumptions",
+    "timeline": "3-5 years"
+  },
+  "trends": [
+    {
+      "keyword": "Trend keyword",
+      "interest": 85,
+      "growth": "Growing 15% YoY"
+    }
+  ],
+  "personas": [
+    {
+      "name": "Primary Customer",
+      "demographics": {
+        "age": "25-35",
+        "income": "$50k-$80k",
+        "location": "Urban areas",
+        "education": "College educated"
+      },
+      "psychographics": {
+        "values": ["Value 1", "Value 2"],
+        "interests": ["Interest 1", "Interest 2"],
+        "painPoints": ["Pain 1", "Pain 2"]
+      },
+      "behaviors": {
+        "buyingHabits": "Online research before purchase",
+        "mediaConsumption": "Social media and blogs",
+        "decisionFactors": ["Factor 1", "Factor 2"]
+      }
+    }
+  ],
+  "competitorActivity": [
+    {
+      "name": "Competitor Name",
+      "fundingRounds": 3,
+      "lastFunding": "Series B - $50M",
+      "marketShare": "15%"
+    }
+  ]
+}
+
+Return only the JSON object. No markdown, no explanations.
+    `;
+
+    const result = await model.generateContent(prompt);
+const textResponse = result.response.text();  
+
+    
+    // Parse the JSON data using safe parser
+    const marketData = safeJsonParse(textResponse);
+    
+    // Validate required structure
+    const requiredFields = ['tam', 'sam', 'som', 'trends', 'personas', 'competitorActivity'];
+    for (const field of requiredFields) {
+      if (!marketData[field]) {
+        throw new Error(`Missing required field: ${field}`);
+      }
+    }
+    
+    return marketData;
+  } catch (error) {
+    console.error('Error generating market research:', error);
+    throw new Error('Failed to generate market research with AI');
+  }
+};
+
+// Function to generate talking points for pitch presentations
+const generateTalkingPoints = async (pitchDeckContent, slideTitle) => {
+  try {
+    const prompt = `
+You are a pitch coach helping entrepreneurs prepare for investor presentations.
+
+SLIDE TITLE: "${slideTitle}"
+SLIDE CONTENT: "${pitchDeckContent}"
+
+Generate 5-7 key talking points that a founder should cover when presenting this slide. Make them:
+- Conversational and natural
+- Focused on investor concerns
+- Include specific data points or examples where relevant
+- Flow logically from one point to the next
+
+CRITICAL: Return ONLY a valid JSON object with this exact structure:
+
+{
+  "talkingPoints": [
+    "First talking point with specific details",
+    "Second talking point building on the first",
+    "Third talking point with data or examples"
+  ]
+}
+
+Return only the JSON object. No markdown, no explanations.
+    `;
+
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const textResponse = response.text();
+    
+    // Parse the JSON data using safe parser
+    const talkingData = safeJsonParse(textResponse);
+    
+    if (!talkingData.talkingPoints || !Array.isArray(talkingData.talkingPoints)) {
+      throw new Error('Invalid talking points structure');
+    }
+    
+    return talkingData.talkingPoints;
+  } catch (error) {
+    console.error('Error generating talking points:', error);
+    throw new Error('Failed to generate talking points');
+  }
+};
+
+// Function to match investors based on startup criteria
+const matchInvestors = async (criteria) => {
+  try {
+    const { industry, stage, fundingAmount, location, businessModel } = criteria;
+    
+    const prompt = `
+You are an investment matching expert. Based on the startup criteria below, generate a list of potential investor matches with detailed analysis.
+
+STARTUP CRITERIA:
+- Industry: ${industry}
+- Stage: ${stage}
+- Funding Amount: ${fundingAmount}
+- Location: ${location}
+- Business Model: ${businessModel}
+
+Generate 5-8 realistic investor matches with detailed information.
+
+CRITICAL: Return ONLY a valid JSON object with this exact structure:
+
+{
+  "matches": [
+    {
+      "name": "Investor/VC Name",
+      "type": "VC",
+      "industryFocus": ["Industry 1", "Industry 2"],
+      "description": "Brief description of the investor and their investment thesis",
+      "location": "Geographic location",
+      "contactLink": "https://example.com/contact",
+      "investmentRange": {
+        "min": 1000000,
+        "max": 10000000
+      },
+      "matchScore": 85,
+      "matchReasons": [
+        "Reason 1 for why this is a good match",
+        "Reason 2 for compatibility"
+      ],
+      "recentInvestments": ["Company 1", "Company 2"],
+      "portfolioSize": 50
+    }
+  ]
+}
+
+Make the investors realistic and relevant to the criteria. Return only the JSON object.
+    `;
+
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const textResponse = response.text();
+    
+    // Parse the JSON data using safe parser
+    const matchData = safeJsonParse(textResponse);
+    
+    if (!matchData.matches || !Array.isArray(matchData.matches)) {
+      throw new Error('Invalid investor matches structure');
+    }
+    
+    return matchData.matches;
+  } catch (error) {
+    console.error('Error matching investors:', error);
+    throw new Error('Failed to match investors');
+  }
+};
+
 module.exports = {
   validateIdea,
   generatePitchDeck,
   generateCanvas,
   generateCompetitorAnalysis,
-  simulateInvestorQA
+  simulateInvestorQA,
+  generateMarketResearch,
+  generateTalkingPoints,
+  matchInvestors
 };
