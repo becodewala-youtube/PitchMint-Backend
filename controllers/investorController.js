@@ -3,6 +3,7 @@ const User = require('../models/User');
 const CreditTransaction = require('../models/CreditTransaction');
 const { matchInvestors: aiMatchInvestors } = require('../utils/geminiApi');
 const logger = require('../utils/logger');
+const { logActivity } = require('../utils/activityLogger');
 
 // @desc    Get all investors
 // @route   GET /api/investors
@@ -60,6 +61,16 @@ const matchInvestors = async (req, res) => {
     // Generate AI-powered investor matches
     const matches = await aiMatchInvestors(criteria);
     
+    // Log activity
+    await logActivity(
+      req.user._id,
+      'investor_matching',
+      `Investor Matching: ${criteria.industry} - ${criteria.stage}`,
+      `Found ${matches.length} investor matches for ${criteria.industry} startup`,
+      { criteria, matches },
+      2
+    );
+
     // Deduct credits from database
     const user = await User.findById(req.user._id);
     if (user.credits >= 2) {

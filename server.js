@@ -90,6 +90,7 @@ const competitorRoutes = require('./routes/competitorRoutes');
 const pitchSimulatorRoutes = require('./routes/pitchSimulatorRoutes');
 const creditRoutes = require('./routes/creditRoutes');
 const marketResearchRoutes = require('./routes/marketResearchRoutes');
+const historyRoutes = require('./routes/historyRoutes');
 
 // Mount routes
 app.use('/api/auth', authRoutes);
@@ -102,6 +103,7 @@ app.use('/api/competitors', competitorRoutes);
 app.use('/api/pitch-simulator', pitchSimulatorRoutes);
 app.use('/api/credits', creditRoutes);
 app.use('/api/market-research', marketResearchRoutes);
+app.use('/api/history', historyRoutes);
 
 // ✅ Health check
 app.get('/', (req, res) => {

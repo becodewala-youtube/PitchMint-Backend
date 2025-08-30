@@ -1,6 +1,7 @@
 const Idea = require('../models/Idea');
 const User = require('../models/User');
 const { generatePitchDeck } = require('../utils/geminiApi');
+const { generateTalkingPoints } = require('../utils/geminiApi');
 const logger = require('../utils/logger');
 const CreditTransaction = require('../models/CreditTransaction');
 
@@ -53,6 +54,48 @@ const generatePitchDeckForIdea = async (req, res) => {
   }
 };
 
+// @desc    Generate talking points for a slide
+// @route   POST /api/pitchdeck/talking-points/:id
+// @access  Private
+const generateTalkingPointsForSlide = async (req, res) => {
+  try {
+    const { slideIndex = 0 } = req.body;
+    const idea = await Idea.findById(req.params.id);
+
+    if (!idea) {
+      return res.status(404).json({ message: 'Idea not found' });
+    }
+
+    if (idea.userId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Not authorized to access this idea' });
+    }
+
+    if (!idea.pitchDeckContent) {
+      return res.status(400).json({ message: 'No pitch deck content available' });
+    }
+
+    const slides = [
+      { title: 'Problem', content: idea.pitchDeckContent.problem },
+      { title: 'Solution', content: idea.pitchDeckContent.solution },
+      { title: 'Market Size', content: idea.pitchDeckContent.marketSize },
+      { title: 'Business Model', content: idea.pitchDeckContent.businessModel },
+      { title: 'Competition', content: idea.pitchDeckContent.competitors },
+      { title: 'Go-to-Market Strategy', content: idea.pitchDeckContent.goToMarket },
+      { title: 'Team', content: idea.pitchDeckContent.team },
+      { title: 'Financials', content: idea.pitchDeckContent.financials },
+      { title: 'Milestones', content: idea.pitchDeckContent.milestones },
+      { title: 'Ask & Use of Funds', content: idea.pitchDeckContent.askAndUse }
+    ];
+
+    const currentSlide = slides[slideIndex] || slides[0];
+    const talkingPoints = await generateTalkingPoints(currentSlide.content, currentSlide.title);
+
+    res.json({ talkingPoints });
+  } catch (error) {
+    logger.error('Error generating talking points:', error);
+    res.status(500).json({ message: 'Failed to generate talking points' });
+  }
+};
 
 // @desc    Regenerate a pitch deck for an idea
 // @route   PUT /api/pitchdeck/:id
@@ -93,5 +136,6 @@ const regeneratePitchDeck = async (req, res) => {
 
 module.exports = {
   generatePitchDeckForIdea,
-  regeneratePitchDeck
+  regeneratePitchDeck,
+  generateTalkingPointsForSlide
 };

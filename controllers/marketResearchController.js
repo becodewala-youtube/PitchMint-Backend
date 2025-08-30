@@ -2,6 +2,7 @@ const User = require('../models/User');
 const CreditTransaction = require('../models/CreditTransaction');
 const { generateMarketResearch } = require('../utils/geminiApi');
 const logger = require('../utils/logger');
+const { logActivity } = require('../utils/activityLogger');
 
 // @desc    Analyze market for startup idea
 // @route   POST /api/market-research/analyze
@@ -19,6 +20,15 @@ const analyzeMarket = async (req, res) => {
     // Generate market research
     const marketData = await generateMarketResearch(ideaText, industry, targetRegion);
 
+    // Log activity
+    await logActivity(
+      req.user._id,
+      'market_research',
+      `Market Research: ${ideaText.substring(0, 50)}...`,
+      `Generated TAM/SAM/SOM analysis for ${industry} in ${targetRegion}`,
+      marketData,
+      2
+    );
     // Deduct credits from database
     const user = await User.findById(req.user._id);
     if (user.credits >= 2) {

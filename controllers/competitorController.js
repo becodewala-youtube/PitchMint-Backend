@@ -4,6 +4,7 @@ const User = require('../models/User');
 const CreditTransaction = require('../models/CreditTransaction');
 const { generateCompetitorAnalysis } = require('../utils/geminiApi');
 const logger = require('../utils/logger');
+const { logActivity } = require('../utils/activityLogger');
 
 // backend/controllers/competitorController.js
 const analyzeCompetitors = async (req, res) => {
@@ -44,6 +45,16 @@ const analyzeCompetitors = async (req, res) => {
     idea.competitorAnalysis = analysis;
     await idea.save();
 
+    // Log activity
+    await logActivity(
+      user._id,
+      'competitor_analysis',
+      `Competitor Analysis: ${idea.ideaText.substring(0, 50)}...`,
+      'Generated comprehensive competitor analysis with SWOT analysis',
+      analysis,
+      1,
+      idea._id
+    );
     // Deduct credits from database
     user.credits = Math.max(0, user.credits - 1);
     await user.save();
