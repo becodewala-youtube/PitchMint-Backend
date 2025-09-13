@@ -2,7 +2,7 @@ const Idea = require('../models/Idea');
 const User = require('../models/User');
 const { validateIdea } = require('../utils/geminiApi');
 const CreditTransaction = require('../models/CreditTransaction');
-
+const { logActivity } = require('../utils/activityLogger');
 
 // @desc    Submit a new startup idea
 // @route   POST /api/idea/submit
@@ -29,6 +29,25 @@ const submitStartupIdea = async (req, res) => {
       analysis: validationResults.analysis
     });
 
+    // Log activity
+    await logActivity(
+      req.user._id,
+      'idea_validation',
+      `Idea Validation: ${ideaText.substring(0, 50)}...`,
+      'Generated comprehensive startup idea analysis with market demand, competition, and monetization scores',
+      {
+        ideaText,
+        scores: {
+          marketDemand: validationResults.marketDemandScore,
+          competition: validationResults.competitionScore,
+          monetization: validationResults.monetizationFeasibilityScore,
+          overall: validationResults.overallScore
+        },
+        analysis: validationResults.analysis
+      },
+      1,
+      idea._id
+    );
     // Add the idea to user's saved ideas
     await User.findByIdAndUpdate(
       req.user._id,

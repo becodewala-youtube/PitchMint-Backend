@@ -13,7 +13,7 @@ const {
   uploadProfilePicture
 } = require('../controllers/authController');
 const { protect } = require('../middleware/authMiddleware');
-const upload = require('../middleware/uploadMiddleware');
+const { upload, audioUpload } = require('../middleware/uploadMiddleware');
 const { validateUserRegistration, handleValidationErrors } = require('../middleware/sanitizer');
 
 router.post('/register', validateUserRegistration, handleValidationErrors, registerUser);

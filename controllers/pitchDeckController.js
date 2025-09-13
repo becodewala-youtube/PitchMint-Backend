@@ -5,6 +5,8 @@ const { generateTalkingPoints } = require('../utils/geminiApi');
 const logger = require('../utils/logger');
 const CreditTransaction = require('../models/CreditTransaction');
 
+
+
 // @desc    Generate a pitch deck for an idea
 // @route   POST /api/pitchdeck/:id
 // @access  Private
@@ -90,6 +92,28 @@ const generateTalkingPointsForSlide = async (req, res) => {
     const currentSlide = slides[slideIndex] || slides[0];
     const talkingPoints = await generateTalkingPoints(currentSlide.content, currentSlide.title);
 
+    // Save talking points to database
+    if (!idea.collaborativeData) {
+      idea.collaborativeData = { comments: [], talkingPoints: [], lastModified: new Date() };
+    }
+    
+    // Update or add talking points for this slide
+    const existingPointsIndex = idea.collaborativeData.talkingPoints.findIndex(tp => tp.slideIndex === slideIndex);
+    const talkingPointsData = {
+      slideIndex,
+      slideTitle: currentSlide.title,
+      points: talkingPoints,
+      createdAt: new Date()
+    };
+    
+    if (existingPointsIndex >= 0) {
+      idea.collaborativeData.talkingPoints[existingPointsIndex] = talkingPointsData;
+    } else {
+      idea.collaborativeData.talkingPoints.push(talkingPointsData);
+    }
+    
+    idea.collaborativeData.lastModified = new Date();
+    await idea.save();
     res.json({ talkingPoints });
   } catch (error) {
     logger.error('Error generating talking points:', error);
@@ -134,8 +158,160 @@ const regeneratePitchDeck = async (req, res) => {
   }
 };
 
+// @desc    Update slide content for collaborative editing
+// @route   PUT /api/pitchdeck/collaborative/:id/slide
+// @access  Private
+const updateSlideContent = async (req, res) => {
+  try {
+    const { slideIndex, content, slideTitle } = req.body;
+    const idea = await Idea.findById(req.params.id);
+
+    if (!idea || idea.userId.toString() !== req.user._id.toString()) {
+      return res.status(404).json({ message: 'Idea not found or unauthorized' });
+    }
+
+    if (!idea.pitchDeckContent) {
+      return res.status(400).json({ message: 'No pitch deck content available' });
+    }
+
+    // Update the specific slide content
+    const slideKeys = ['problem', 'solution', 'marketSize', 'businessModel', 'competitors', 'goToMarket', 'team', 'financials', 'milestones', 'askAndUse'];
+    const slideKey = slideKeys[slideIndex];
+    
+    if (slideKey) {
+      idea.pitchDeckContent[slideKey] = content;
+      idea.markModified('pitchDeckContent');
+      
+      // Update collaborative data timestamp
+      if (!idea.collaborativeData) {
+        idea.collaborativeData = { comments: [], talkingPoints: [], lastModified: new Date() };
+      }
+      idea.collaborativeData.lastModified = new Date();
+      
+      await idea.save();
+    }
+
+    res.json({ message: 'Slide updated successfully' });
+  } catch (error) {
+    logger.error('Error updating slide:', error);
+    res.status(500).json({ message: 'Failed to update slide' });
+  }
+};
+
+// @desc    Add comment to pitch deck
+// @route   POST /api/pitchdeck/collaborative/:id/comment
+// @access  Private
+const addComment = async (req, res) => {
+  try {
+    const { text, slideIndex, position } = req.body;
+    const idea = await Idea.findById(req.params.id);
+
+    if (!idea || idea.userId.toString() !== req.user._id.toString()) {
+      return res.status(404).json({ message: 'Idea not found or unauthorized' });
+    }
+
+    if (!idea.collaborativeData) {
+      idea.collaborativeData = { comments: [], talkingPoints: [], lastModified: new Date() };
+    }
+
+    const comment = {
+      id: Date.now().toString(),
+      userId: req.user._id,
+      userName: req.user.name,
+      text,
+      slideIndex,
+      position: position || { x: 50, y: 50 },
+      createdAt: new Date()
+    };
+
+    idea.collaborativeData.comments.push(comment);
+    idea.collaborativeData.lastModified = new Date();
+    await idea.save();
+
+    res.json({ comment });
+  } catch (error) {
+    logger.error('Error adding comment:', error);
+    res.status(500).json({ message: 'Failed to add comment' });
+  }
+};
+
+// @desc    Delete comment from pitch deck
+// @route   DELETE /api/pitchdeck/collaborative/:id/comment/:commentId
+// @access  Private
+const deleteComment = async (req, res) => {
+  try {
+    const { commentId } = req.params;
+    const idea = await Idea.findById(req.params.id);
+
+    if (!idea || idea.userId.toString() !== req.user._id.toString()) {
+      return res.status(404).json({ message: 'Idea not found or unauthorized' });
+    }
+
+    if (idea.collaborativeData?.comments) {
+      idea.collaborativeData.comments = idea.collaborativeData.comments.filter(
+        comment => comment.id !== commentId
+      );
+      idea.collaborativeData.lastModified = new Date();
+      await idea.save();
+    }
+
+    res.json({ message: 'Comment deleted successfully' });
+  } catch (error) {
+    logger.error('Error deleting comment:', error);
+    res.status(500).json({ message: 'Failed to delete comment' });
+  }
+};
+
+// @desc    Process voice feedback for pitch practice
+// @route   POST /api/pitchdeck/voice-feedback/:id
+// @access  Private
+const processVoiceFeedback = async (req, res) => {
+  try {
+    const { slideIndex } = req.body;
+    const audioFile = req.file;
+
+    if (!audioFile) {
+      return res.status(400).json({ message: 'No audio file provided' });
+    }
+
+    // Process audio file from memory buffer
+    const audioBuffer = audioFile.buffer;
+    const audioSize = audioBuffer.length;
+    
+    // For now, return mock feedback with actual file info
+    const mockFeedback = {
+      transcription: "Mock transcription of your pitch practice",
+      audioInfo: {
+        size: `${(audioSize / 1024).toFixed(2)} KB`,
+        duration: "Estimated 30 seconds",
+        format: audioFile.mimetype
+      },
+      feedback: {
+        clarity: Math.floor(Math.random() * 20) + 80, // 80-100
+        confidence: Math.floor(Math.random() * 20) + 75, // 75-95
+        pace: Math.floor(Math.random() * 15) + 80, // 80-95
+        suggestions: [
+          "Speak slightly slower for better clarity",
+          "Add more emphasis on key value propositions",
+          "Include specific metrics to support claims",
+          "Practice transitions between slides"
+        ]
+      }
+    };
+
+    res.json(mockFeedback);
+  } catch (error) {
+    logger.error('Error processing voice feedback:', error);
+    res.status(500).json({ message: 'Failed to process voice feedback' });
+  }
+};
+
 module.exports = {
   generatePitchDeckForIdea,
   regeneratePitchDeck,
-  generateTalkingPointsForSlide
+  generateTalkingPointsForSlide,
+  updateSlideContent,
+  addComment,
+  deleteComment,
+  processVoiceFeedback
 };

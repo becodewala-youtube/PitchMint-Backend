@@ -89,6 +89,16 @@ const analyzeCompetitorsRandom = async (req, res) => {
 
     const analysis = await generateCompetitorAnalysis(ideaText);
 
+    // Log activity for random competitor analysis
+    await logActivity(
+      req.user._id,
+      'competitor_analysis',
+      `Competitor Analysis (Ad-hoc): ${ideaText.substring(0, 50)}...`,
+      'Generated competitor analysis with SWOT for standalone idea',
+      analysis,
+      1,
+      null
+    );
     // CRITICAL FIX: Deduct credits from database
     const user = await User.findById(req.user._id);
     if (user.credits >= 1) {

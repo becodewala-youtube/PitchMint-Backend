@@ -100,6 +100,24 @@ const ideaSchema = new mongoose.Schema({
       }
     }]
   },
+  collaborativeData: {
+    comments: [{
+      id: String,
+      userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+      userName: String,
+      text: String,
+      slideIndex: Number,
+      position: { x: Number, y: Number },
+      createdAt: { type: Date, default: Date.now }
+    }],
+    talkingPoints: [{
+      slideIndex: Number,
+      slideTitle: String,
+      points: [String],
+      createdAt: { type: Date, default: Date.now }
+    }],
+    lastModified: { type: Date, default: Date.now }
+  },
   createdAt: {
     type: Date,
     default: Date.now

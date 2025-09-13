@@ -4,6 +4,7 @@ const User = require('../models/User');
 const CreditTransaction = require('../models/CreditTransaction');
 const { simulateInvestorQA } = require('../utils/geminiApi');
 const logger = require('../utils/logger');
+const { logActivity } = require('../utils/activityLogger');
 
 const simulatePitch = async (req, res) => {
   try {
@@ -126,6 +127,16 @@ const simulatePitchRandom = async (req, res) => {
 
     const questions = await simulateInvestorQA(pitch);
 
+    // Log activity for random pitch simulation
+    await logActivity(
+      req.user._id,
+      'pitch_simulator',
+      `Pitch Simulation (Ad-hoc)`,
+      'Generated investor-style Q&A for standalone pitch',
+      questions,
+      1,
+      null
+    );
     // CRITICAL FIX: Deduct credits from database
     const user = await User.findById(req.user._id);
     if (user.credits >= 1) {
@@ -162,6 +173,16 @@ const evaluateAnswerRandom = async (req, res) => {
 
     const feedback = await simulateInvestorQA(pitch, question, answer);
     
+    // Log activity for random answer evaluation
+    await logActivity(
+      req.user._id,
+      'pitch_simulator',
+      `Pitch Q&A (Ad-hoc): ${question.substring(0, 50)}...`,
+      'Evaluated answer for standalone pitch and generated feedback',
+      { question, answer, feedback: feedback.feedback },
+      0,
+      null
+    );
     res.json(feedback);
   } catch (error) {
     logger.error('Error evaluating answer:', error);
