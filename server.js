@@ -1,15 +1,20 @@
+// ✅ Load environment variables FIRST
+require('dotenv').config();
+
 const express = require('express');
-const dotenv = require('dotenv');
 const cors = require('cors');
 const connectDB = require('./config/db');
 const morgan = require('morgan');
 const { apiLimiter, authLimiter } = require('./middleware/rateLimiter');
 const { sanitizeInput } = require('./middleware/sanitizer');
 const logger = require('./utils/logger');
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const Razorpay = require('razorpay');
 
-// ✅ Load environment variables
-dotenv.config();
+// ✅ Initialize Razorpay AFTER loading environment variables
+const razorpay = new Razorpay({
+  key_id: process.env.RAZORPAY_KEY_ID,
+  key_secret: process.env.RAZORPAY_KEY_SECRET
+});
 
 const app = express();
 
@@ -19,8 +24,9 @@ connectDB().catch(err => {
   process.exit(1);
 });
 
-// ✅ Stripe Webhook raw body parser (must come before express.json)
-app.use('/webhook', express.raw({ type: 'application/json' }));
+// ✅ Webhook raw body parser (must come before express.json)
+app.use('/razorpay-webhook', express.raw({ type: 'application/json' }));
+app.use('/api/payment/webhook', express.raw({ type: 'application/json' }));
 
 // Middleware
 const allowedOrigins = [
@@ -36,11 +42,11 @@ app.use(cors({
       callback(new Error('Not allowed by CORS'));
     }
   },
-  credentials: true, // required for cookies or sessions
+  credentials: true,
 }));
 
 // ✅ General middleware (after raw and CORS)
-app.use(express.json()); // Must come after raw body parsing for /webhook
+app.use(express.json());
 app.use(sanitizeInput);
 
 // Apply rate limiting
@@ -52,32 +58,132 @@ if (process.env.NODE_ENV === 'development') {
   app.use(morgan('dev'));
 }
 
-// ✅ Stripe Webhook handler
-app.post('/webhook', (req, res) => {
-  const sig = req.headers['stripe-signature'];
-  const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
+// ✅ Razorpay Webhook handler
+app.post('/razorpay-webhook', (req, res) => {
+  const webhookSignature = req.headers['x-razorpay-signature'];
+  const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
 
+  if (!webhookSecret) {
+    logger.error('❌ RAZORPAY_WEBHOOK_SECRET not configured');
+    return res.status(500).send('Webhook secret not configured');
+  }
+
+  let body;
   let event;
+  
   try {
-    event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
+    const rawBody = req.body;
+    body = JSON.parse(rawBody.toString());
+    
+    // Verify webhook signature
+    const crypto = require('crypto');
+    const expectedSignature = crypto
+      .createHmac('sha256', webhookSecret)
+      .update(rawBody)
+      .digest('hex');
+    
+    if (expectedSignature !== webhookSignature) {
+      throw new Error('Invalid signature');
+    }
+
+    event = body.event;
+    logger.info(`✅ Webhook verified: ${event}`);
+    
   } catch (err) {
-    logger.error('❌ Webhook signature verification failed:', err.message);
+    logger.error('❌ Razorpay webhook signature verification failed:', err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
-  // ✅ Handle Stripe events
-  switch (event.type) {
-    case 'checkout.session.completed':
-      const session = event.data.object;
-      logger.info('✅ Payment successful:', session);
-      // TODO: Save to DB or trigger email here
-      break;
-    default:
-      logger.warn(`Unhandled event type: ${event.type}`);
+  // ✅ Handle Razorpay events
+  try {
+    switch (event) {
+      case 'payment.captured':
+        handlePaymentCaptured(body.payload.payment.entity);
+        break;
+      
+      case 'payment.failed':
+        handlePaymentFailed(body.payload.payment.entity);
+        break;
+      
+      case 'order.paid':
+        handleOrderPaid(body.payload.order.entity);
+        break;
+      
+      default:
+        logger.warn(`Unhandled event type: ${event}`);
+    }
+  } catch (error) {
+    logger.error('Error processing webhook event:', error);
+    return res.status(500).send('Webhook processing failed');
   }
 
   res.status(200).json({ received: true });
 });
+
+// Webhook event handlers
+async function handlePaymentCaptured(payment) {
+  try {
+    logger.info('✅ Payment captured:', {
+      id: payment.id,
+      order_id: payment.order_id,
+      amount: payment.amount,
+      status: payment.status
+    });
+
+    const order = await razorpay.orders.fetch(payment.order_id);
+    const { userId, planId, credits, type } = order.notes;
+
+    if (type === 'credit_purchase') {
+      const CreditTransaction = require('./models/CreditTransaction');
+      const existingTransaction = await CreditTransaction.findOne({
+        razorpayPaymentId: payment.id
+      });
+
+      if (existingTransaction) {
+        logger.info(`Payment ${payment.id} already processed`);
+        return;
+      }
+
+      const User = require('./models/User');
+      const user = await User.findById(userId);
+      
+      if (user) {
+        user.credits = (user.credits || 0) + parseInt(credits);
+        await user.save();
+
+        await CreditTransaction.create({
+          userId: user._id,
+          type: 'purchase',
+          amount: parseInt(credits),
+          description: `Purchased ${credits} credits via webhook`,
+          razorpayPaymentId: payment.id,
+          razorpayOrderId: payment.order_id
+        });
+
+        logger.info(`✅ Webhook: User ${userId} credited with ${credits} credits`);
+      }
+    }
+  } catch (error) {
+    logger.error('Error handling payment.captured:', error);
+  }
+}
+
+async function handlePaymentFailed(payment) {
+  logger.error('❌ Payment failed:', {
+    id: payment.id,
+    order_id: payment.order_id,
+    error_code: payment.error_code,
+    error_description: payment.error_description
+  });
+}
+
+async function handleOrderPaid(order) {
+  logger.info('✅ Order paid:', {
+    id: order.id,
+    amount: order.amount,
+    status: order.status
+  });
+}
 
 // Import routes
 const authRoutes = require('./routes/authRoutes');
@@ -107,16 +213,47 @@ app.use('/api/history', historyRoutes);
 
 // ✅ Health check
 app.get('/', (req, res) => {
-  res.json({ message: 'Welcome to PitchMint API' });
+  res.json({ 
+    message: 'Welcome to PitchMint API',
+    timestamp: new Date().toISOString(),
+    env: process.env.NODE_ENV
+  });
 });
+
+// ✅ Environment variables check endpoint (development only)
+if (process.env.NODE_ENV === 'development') {
+  app.get('/api/health', (req, res) => {
+    res.json({
+      status: 'OK',
+      env_vars: {
+        RAZORPAY_KEY_ID: process.env.RAZORPAY_KEY_ID ? '✅ Set' : '❌ Missing',
+        RAZORPAY_KEY_SECRET: process.env.RAZORPAY_KEY_SECRET ? '✅ Set' : '❌ Missing',
+        RAZORPAY_WEBHOOK_SECRET: process.env.RAZORPAY_WEBHOOK_SECRET ? '✅ Set' : '❌ Missing',
+        MONGODB_URI: process.env.MONGODB_URI ? '✅ Set' : '❌ Missing'
+      }
+    });
+  });
+}
 
 // ✅ Error handler
 app.use((err, req, res, next) => {
-  logger.error(err.stack);
+  logger.error('Global error handler:', err);
+  
   const statusCode = err.statusCode || 500;
+  const message = err.message || 'Internal Server Error';
+  
   res.status(statusCode).json({
-    message: err.message || 'Internal Server Error',
-    stack: process.env.NODE_ENV === 'development' ? err.stack : {}
+    success: false,
+    message,
+    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+  });
+});
+
+// ✅ 404 handler
+app.use('*', (req, res) => {
+  res.status(404).json({
+    success: false,
+    message: `Route ${req.originalUrl} not found`
   });
 });
 
@@ -124,4 +261,11 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   logger.info(`🚀 Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
+  
+  // Log configuration status
+  logger.info('Configuration check:', {
+    RAZORPAY_KEY_ID: process.env.RAZORPAY_KEY_ID ? 'Set' : 'Missing',
+    RAZORPAY_KEY_SECRET: process.env.RAZORPAY_KEY_SECRET ? 'Set' : 'Missing',
+    RAZORPAY_WEBHOOK_SECRET: process.env.RAZORPAY_WEBHOOK_SECRET ? 'Set' : 'Missing'
+  });
 });

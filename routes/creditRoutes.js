@@ -4,7 +4,7 @@ const {
   getCreditPlans,
   getCreditHistory,
   purchaseCredits,
-  confirmPurchase,
+  verifyPayment,
   getCreditBalance,
   simulatePaymentSuccess  // Add this
 } = require('../controllers/creditController');
@@ -15,7 +15,7 @@ router.get('/history', protect, getCreditHistory);
 router.get('/balance', protect, getCreditBalance);
 router.post('/purchase', protect, purchaseCredits);
 router.post('/create-checkout-session', protect, purchaseCredits); // Add alias for backward compatibility
-router.post('/confirm-purchase', protect, confirmPurchase);
+router.post('/verify-payment', protect, verifyPayment);
 router.post('/simulate-payment-success', protect, simulatePaymentSuccess);  // Add this
 
 module.exports = router;

@@ -59,7 +59,7 @@ const deductCredits = (amount = 1, service) => {
           relatedService: service
         });
 
-        console.log(`Credits deducted: ${amount}, Remaining: ${user.credits}`);
+        
         next();
       } else {
         return res.status(402).json({ 

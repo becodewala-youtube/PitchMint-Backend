@@ -21,10 +21,14 @@ const creditTransactionSchema = new mongoose.Schema({
   },
   relatedService: {
     type: String,
-    enum: ['idea_validation', 'pitch_deck', 'canvas', 'competitor_analysis', 'pitch_simulator','market_research','investor_matching'],
+    enum: ['idea_validation', 'pitch_deck', 'canvas', 'competitor_analysis', 'pitch_simulator'],
     default: null
   },
-  stripePaymentIntentId: {
+  razorpayPaymentId: {
+    type: String,
+    default: null
+  },
+  razorpayOrderId: {
     type: String,
     default: null
   },
