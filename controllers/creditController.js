@@ -27,7 +27,7 @@ const CREDIT_PLANS = {
   starter: {
     name: 'Starter Pack',
     credits: 25,
-    price: 500, // ₹5.00
+    price: 9900, // ₹99.00
     description: 'Perfect for testing ideas'
   },
   pro: {

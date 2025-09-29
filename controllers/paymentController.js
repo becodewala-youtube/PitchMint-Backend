@@ -34,7 +34,7 @@ const upgradeUserToPremium = async (req, res) => {
     const receipt = `prem_${shortUserId}_${shortTimestamp}`;
 
     const orderData = {
-      amount: 200, // ₹2.00 in paise
+      amount: 2900, 
       currency: 'INR',
       receipt: receipt, // Fixed: Now under 40 characters
       notes: {
