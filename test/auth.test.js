@@ -48,7 +48,7 @@ describe('Auth Endpoints', () => {
     });
   });
 
-  describe('POST /api/auth/login', () => {
+  describe('POST /api/auth/signin', () => {
     test('should login with valid credentials', async () => {
       const user = await User.create({
         name: 'Test User',
@@ -58,7 +58,7 @@ describe('Auth Endpoints', () => {
       });
 
       const response = await request(app)
-        .post('/api/auth/login')
+        .post('/api/auth/signin')
         .send({
           email: 'test@example.com',
           password: 'password123'
@@ -71,7 +71,7 @@ describe('Auth Endpoints', () => {
 
     test('should not login with invalid credentials', async () => {
       const response = await request(app)
-        .post('/api/auth/login')
+        .post('/api/auth/signin')
         .send({
           email: 'test@example.com',
           password: 'wrongpassword'

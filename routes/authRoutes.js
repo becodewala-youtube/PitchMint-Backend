@@ -19,7 +19,7 @@ const { validateUserRegistration, handleValidationErrors } = require('../middlew
 router.post('/register', validateUserRegistration, handleValidationErrors, registerUser);
 router.post('/verify-email', verifyEmail);
 router.post('/resend-verification', resendVerification);
-router.post('/login', loginUser);
+router.post('/signin', loginUser);
 router.post('/google', googleAuth);
 router.post('/forgot-password', forgotPassword);
 router.post('/reset-password', resetPassword);

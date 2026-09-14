@@ -132,7 +132,7 @@ const resendVerification = async (req, res) => {
 };
 
 // @desc    Authenticate a user & get token
-// @route   POST /api/auth/login
+// @route   POST /api/auth/signin
 // @access  Public
 const loginUser = async (req, res) => {
   try {

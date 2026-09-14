@@ -18,12 +18,6 @@ const razorpay = new Razorpay({
 
 const app = express();
 
-// ✅ Connect to MongoDB
-connectDB().catch(err => {
-  logger.error('Failed to connect to MongoDB:', err);
-  process.exit(1);
-});
-
 // ✅ Webhook raw body parser (must come before express.json)
 app.use('/razorpay-webhook', express.raw({ type: 'application/json' }));
 app.use('/api/payment/webhook', express.raw({ type: 'application/json' }));
@@ -259,13 +253,20 @@ app.use('*', (req, res) => {
 
 // ✅ Start server
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  logger.info(`🚀 Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
-  
-  // Log configuration status
-  logger.info('Configuration check:', {
-    RAZORPAY_KEY_ID: process.env.RAZORPAY_KEY_ID ? 'Set' : 'Missing',
-    RAZORPAY_KEY_SECRET: process.env.RAZORPAY_KEY_SECRET ? 'Set' : 'Missing',
-    RAZORPAY_WEBHOOK_SECRET: process.env.RAZORPAY_WEBHOOK_SECRET ? 'Set' : 'Missing'
+connectDB()
+  .then(() => {
+    app.listen(PORT, () => {
+      logger.info(`🚀 Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
+      
+      // Log configuration status
+      logger.info('Configuration check:', {
+        RAZORPAY_KEY_ID: process.env.RAZORPAY_KEY_ID ? 'Set' : 'Missing',
+        RAZORPAY_KEY_SECRET: process.env.RAZORPAY_KEY_SECRET ? 'Set' : 'Missing',
+        RAZORPAY_WEBHOOK_SECRET: process.env.RAZORPAY_WEBHOOK_SECRET ? 'Set' : 'Missing'
+      });
+    });
+  })
+  .catch(error => {
+    logger.error('Failed to connect to MongoDB:', error.message);
+    process.exit(1);
   });
-});

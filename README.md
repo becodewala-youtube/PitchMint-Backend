@@ -234,7 +234,7 @@ http://localhost:5000/api/auth/register \
 ```bash
 curl -X POST \
 
-http://localhost:5000/api/auth/login \
+http://localhost:5000/api/auth/signin \
 
   - H 'Content-Type: application/json' \
 
