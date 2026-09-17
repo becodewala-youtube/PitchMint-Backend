@@ -138,6 +138,10 @@ const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
 
+    if (!email || !password) {
+      return res.status(400).json({ message: 'Email and password are required' });
+    }
+
     // Check for user email
     const user = await User.findOne({ email }).select('+password');
 
@@ -151,6 +155,12 @@ const loginUser = async (req, res) => {
         message: 'Please verify your email before logging in',
         emailNotVerified: true,
         email: user.email
+      });
+    }
+
+    if (!user.password) {
+      return res.status(401).json({
+        message: 'This account uses Google sign-in. Please continue with Google.'
       });
     }
 
