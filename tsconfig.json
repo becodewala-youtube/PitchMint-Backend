@@ -3,7 +3,7 @@
     "target": "ES2022",
     "module": "commonjs",
     "outDir": "./dist",
-    "rootDir": "./",
+    "rootDir": "./src",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -12,17 +12,7 @@
     "types": ["node", "jest"]
   },
   "include": [
-    "server.ts",
-    "config/**/*.ts",
-    "controllers/**/*.ts",
-    "middleware/**/*.ts",
-    "models/**/*.ts",
-    "routes/**/*.ts",
-    "utils/**/*.ts",
-    "scripts/**/*.ts",
-    "test/**/*.ts",
-    "types/**/*.ts",
-    "types/**/*.d.ts"
+    "src/**/*"
   ],
   "exclude": [
     "node_modules",
