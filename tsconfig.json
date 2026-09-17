@@ -1,0 +1,31 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "outDir": "./dist",
+    "rootDir": "./",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "types": ["node", "jest"]
+  },
+  "include": [
+    "server.ts",
+    "config/**/*.ts",
+    "controllers/**/*.ts",
+    "middleware/**/*.ts",
+    "models/**/*.ts",
+    "routes/**/*.ts",
+    "utils/**/*.ts",
+    "scripts/**/*.ts",
+    "test/**/*.ts",
+    "types/**/*.ts",
+    "types/**/*.d.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
+}
