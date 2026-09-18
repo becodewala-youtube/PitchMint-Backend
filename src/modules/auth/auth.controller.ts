@@ -214,8 +214,15 @@ export const googleAuth = async (req: Request, res: Response): Promise<any> => {
         user.googleId = googleId;
         user.authProvider = 'google';
         user.isEmailVerified = true; // Google emails are pre-verified
-        await user.save();
       }
+      // Update profilePicture from Google if present and not a custom Cloudinary avatar, or if empty
+      if (picture && (!user.profilePicture || !user.profilePicture.includes('cloudinary'))) {
+        user.profilePicture = picture;
+      }
+      if (name && !user.name) {
+        user.name = name;
+      }
+      await user.save();
     } else {
       // Create new user
       user = await User.create({

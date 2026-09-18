@@ -72,6 +72,10 @@ export const upgradeUserToPremium = async (req: Request, res: Response): Promise
     } else if (error.description) {
       errorMessage = error.description;
     }
+
+    if (errorMessage.toLowerCase().includes('authentication failed')) {
+      errorMessage = 'Razorpay gateway error: Invalid or expired API credentials in server configuration. Please check RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in .env, or use Demo Upgrade.';
+    }
     
     res.status(500).json({ 
       success: false,
@@ -195,6 +199,55 @@ export const verifyPremiumPayment = async (req: Request, res: Response): Promise
   }
 };
 
+// @desc    Simulate premium upgrade payment (development only)
+// @route   POST /api/payment/simulate-premium-success
+// @access  Private
+export const simulatePremiumUpgrade = async (req: Request, res: Response): Promise<any> => {
+  try {
+    if (env.NODE_ENV !== 'development') {
+      return res.status(403).json({
+        success: false,
+        message: 'Demo payments are only available in development mode'
+      });
+    }
+
+    const user = await User.findById(req.user?._id);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    user.isPremium = true;
+    user.plan = 'premium';
+    await user.save();
+
+    logger.info(`Demo: User ${user._id} upgraded to premium successfully`);
+
+    res.json({
+      success: true,
+      message: 'Demo upgrade successful! You now have Premium access.',
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        isPremium: user.isPremium,
+        credits: user.credits,
+        plan: user.plan,
+        profilePicture: user.profilePicture
+      }
+    });
+  } catch (error: any) {
+    logger.error('Demo premium upgrade error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Demo upgrade failed'
+    });
+  }
+};
+
 // @desc    Handle Razorpay webhook for premium upgrades
 // @route   POST /api/payment/webhook
 // @access  Public
@@ -203,5 +256,6 @@ export const handlePaymentWebhook = processRazorpayWebhook;
 export default {
   upgradeUserToPremium,
   verifyPremiumPayment,
-  handlePaymentWebhook
+  handlePaymentWebhook,
+  simulatePremiumUpgrade
 };

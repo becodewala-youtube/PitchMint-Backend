@@ -47,13 +47,14 @@ export const protect = async (req: Request, res: Response, next: NextFunction): 
 };
 
 // Check if user is premium
-export const premium = (req: Request, res: Response, next: NextFunction): void => {
+export const premium = (req: Request, res: Response, next: NextFunction): any => {
   if (req.user && req.user.isPremium) {
-    next();
-  } else {
-    res.status(403);
-    throw new Error('Premium subscription required');
+    return next();
   }
+  return res.status(403).json({
+    success: false,
+    message: 'Premium subscription required'
+  });
 };
 
 export default { protect, premium };
