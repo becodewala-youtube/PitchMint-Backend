@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "graphify-backend": {
+      "command": "python",
+      "args": [
+        "-m",
+        "graphify.serve",
+        "C:/Users/VIKASH KUMAR/Downloads/pitchmint/PitchMint-Backend/graphify-out/graph.json"
+      ]
+    }
+  }
+}

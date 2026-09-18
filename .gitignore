@@ -4,3 +4,21 @@ combined.log
 error.log
 test-razorpay.js
 dist
+graphify-out/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+
+# Editors
+.vscode/
+.idea/
+
+# Testing
+coverage/
+
+# Typescript
+*.tsbuildinfo
