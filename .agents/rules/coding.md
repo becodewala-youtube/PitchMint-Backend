@@ -1,10 +1,15 @@
 # Backend Coding Conventions
 
-- **TypeScript**: Strict typing is required. Avoid `any`.
-- **Naming**: Use `camelCase` for variables and functions. Use `PascalCase` for classes and interfaces.
-- **File Naming**: Use `kebab-case` with `.ts` extensions (e.g., `user.controller.ts`, `user.service.ts`).
-- **Architecture**: Controllers handle HTTP and route to Services. Services handle business logic and interact with integrations or databases.
-- **Error Handling**: Use Express middleware for asynchronous errors, or specialized error classes.
-- **Async Patterns**: Use async/await natively.
-- **Imports**: Prefer absolute or relative paths aligned with existing module structures.
-- **Comments**: Document public APIs and complex business logic.
+- **TypeScript**: Strict mode is enabled. Avoid `any` (lint warns). Use proper types from `<feature>.types.ts` files.
+- **Module system**: CommonJS (`"type": "commonjs"` in package.json). Use `import`/`export` syntax (transpiled by tsc).
+- **Naming**:
+  - Variables/functions: `camelCase`
+  - Classes/interfaces: `PascalCase`
+  - Files: `kebab-case.ts` with role suffix (e.g., `credit.controller.ts`, `credit.service.ts`, `credit.model.ts`)
+- **Architecture**: Controllers handle HTTP request/response. Services handle business logic. Models define Mongoose schemas. Keep them separated.
+- **Error handling**: Use Express error middleware (`src/shared/errors/`). Wrap async handlers properly. Never swallow errors silently.
+- **Async patterns**: Use `async`/`await`. No raw callbacks.
+- **Imports**: Use relative paths within the same module. Use relative paths to `src/shared/*` from modules.
+- **Logging**: Use the Winston logger from `src/config/logger.ts`. Avoid `console.log` (lint warns, allows `console.warn`/`error`/`info`).
+- **Testing**: Co-locate tests in `__tests__/` within each module. Use `mongodb-memory-server` for DB tests. Test config uses `tsconfig.test.json`.
+- **Comments**: Document public APIs and complex business logic. Preserve existing comments.
