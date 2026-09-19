@@ -4,6 +4,7 @@ import User from '../users/user.model';
 import CreditTransaction from '../credits/credit.model';
 import { generateCanvas } from '../../shared/integrations/gemini/gemini.client';
 import logger from '../../config/logger';
+import { atomicDeductCredits, refundCredits } from '../../shared/middleware/credit.middleware';
 
 // @desc    Generate a business model canvas for an idea
 // @route   POST /api/canvas/:id
@@ -13,36 +14,34 @@ export const generateCanvasForIdea = async (req: Request, res: Response): Promis
     const idea = await Idea.findById(req.params.id);
 
     if (!idea) {
-      return res.status(404).json({ message: 'Idea not found' });
+      return res.status(404).json({ success: false, message: 'Idea not found' });
     }
 
     // Check if the idea belongs to the user
     if (idea.userId.toString() !== req.user?._id?.toString()) {
-      return res.status(403).json({ message: 'Not authorized to access this idea' });
+      return res.status(403).json({ success: false, message: 'Not authorized to access this idea' });
     }
 
-    // Generate canvas
-    const canvasContent = await generateCanvas(idea.ideaText, idea.analysis);
-    
-    // Update idea with canvas content
-    idea.canvasContent = canvasContent;
-    await idea.save();
+    // Atomically deduct credits before external API call
+    const deduction = await atomicDeductCredits(req.user._id, 1, 'canvas');
+    if (!deduction.success) {
+      return res.status(402).json({ success: false, message: 'Insufficient credits' });
+    }
 
-    // Deduct credits from database
+    try {
+      // Generate canvas
+      const canvasContent = await generateCanvas(idea.ideaText, idea.analysis);
+      
+      // Update idea with canvas content
+      idea.canvasContent = canvasContent;
+      await idea.save();
+    } catch (opError) {
+      await refundCredits(req.user._id, deduction.split, 'canvas');
+      throw opError;
+    }
+
+    // Get fresh user credits
     const user = await User.findById(req.user._id);
-    if (user && user.credits >= 1) {
-      user.credits = Math.max(0, user.credits - 1);
-      await user.save();
-
-      // Record transaction
-      await CreditTransaction.create({
-        userId: user._id,
-        type: 'usage',
-        amount: -1,
-        description: 'Used 1 credit for canvas generation',
-        relatedService: 'canvas'
-      });
-    }
 
     logger.info(`Generated canvas for idea ${idea._id}`);
     res.json({
@@ -51,7 +50,7 @@ export const generateCanvasForIdea = async (req: Request, res: Response): Promis
     });
   } catch (error: any) {
     logger.error('Error generating canvas:', error);
-    res.status(500).json({ message: 'Failed to generate canvas' });
+    res.status(500).json({ success: false, message: 'Failed to generate canvas' });
   }
 };
 
@@ -63,36 +62,34 @@ export const regenerateCanvas = async (req: Request, res: Response): Promise<any
     const idea = await Idea.findById(req.params.id);
 
     if (!idea) {
-      return res.status(404).json({ message: 'Idea not found' });
+      return res.status(404).json({ success: false, message: 'Idea not found' });
     }
 
     // Check if the idea belongs to the user
     if (idea.userId.toString() !== req.user?._id?.toString()) {
-      return res.status(403).json({ message: 'Not authorized to access this idea' });
+      return res.status(403).json({ success: false, message: 'Not authorized to access this idea' });
     }
 
-    // Generate new canvas
-    const canvasContent = await generateCanvas(idea.ideaText, idea.analysis);
-    
-    // Update idea with new canvas content
-    idea.canvasContent = canvasContent;
-    await idea.save();
+    // Atomically deduct credits before external API call
+    const deduction = await atomicDeductCredits(req.user._id, 1, 'canvas');
+    if (!deduction.success) {
+      return res.status(402).json({ success: false, message: 'Insufficient credits' });
+    }
 
-    // Deduct credits from database
+    try {
+      // Generate new canvas
+      const canvasContent = await generateCanvas(idea.ideaText, idea.analysis);
+      
+      // Update idea with new canvas content
+      idea.canvasContent = canvasContent;
+      await idea.save();
+    } catch (opError) {
+      await refundCredits(req.user._id, deduction.split, 'canvas');
+      throw opError;
+    }
+
+    // Get updated user with current credits
     const user = await User.findById(req.user._id);
-    if (user && user.credits >= 1) {
-      user.credits = Math.max(0, user.credits - 1);
-      await user.save();
-
-      // Record transaction
-      await CreditTransaction.create({
-        userId: user._id,
-        type: 'usage',
-        amount: -1,
-        description: 'Used 1 credit for canvas regeneration',
-        relatedService: 'canvas'
-      });
-    }
 
     logger.info(`Regenerated canvas for idea ${idea._id}`);
     res.json({
@@ -101,7 +98,7 @@ export const regenerateCanvas = async (req: Request, res: Response): Promise<any
     });
   } catch (error: any) {
     logger.error('Error regenerating canvas:', error);
-    res.status(500).json({ message: 'Failed to regenerate canvas' });
+    res.status(500).json({ success: false, message: 'Failed to regenerate canvas' });
   }
 };
 

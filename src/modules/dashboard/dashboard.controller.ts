@@ -13,7 +13,7 @@ export const getActivityHistory = async (req: Request, res: Response): Promise<a
     };
     
     if (!req.user?._id) {
-      return res.status(401).json({ message: 'Not authorized' });
+      return res.status(401).json({ success: false, message: 'Not authorized' });
     }
 
     const pageNum = Number(page);
@@ -29,7 +29,7 @@ export const getActivityHistory = async (req: Request, res: Response): Promise<a
     res.json(activities);
   } catch (error: any) {
     console.error('Error getting activity history:', error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 

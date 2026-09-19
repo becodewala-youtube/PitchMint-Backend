@@ -11,7 +11,10 @@ const router = express.Router();
 
 router.post('/create-checkout-session', protect, upgradeUserToPremium);
 router.post('/verify-premium', protect, verifyPremiumPayment);
-router.post('/simulate-premium-success', protect, simulatePremiumUpgrade);
+
+if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
+  router.post('/simulate-premium-success', protect, simulatePremiumUpgrade);
+}
 router.post('/webhook', express.raw({ type: 'application/json' }), handlePaymentWebhook);
 
 export default router;

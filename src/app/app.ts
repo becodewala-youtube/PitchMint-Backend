@@ -1,6 +1,7 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
+import helmet from 'helmet';
 import env from '../config/env';
 import { apiLimiter, authLimiter } from '../shared/middleware/rate-limiter.middleware';
 import { sanitizeInput } from '../shared/middleware/sanitizer.middleware';
@@ -10,7 +11,6 @@ import routes from './routes';
 const app = express();
 
 // Webhook raw body parser (must come before express.json)
-app.use('/razorpay-webhook', express.raw({ type: 'application/json' }));
 app.use('/api/payment/webhook', express.raw({ type: 'application/json' }));
 
 // CORS configuration
@@ -29,6 +29,9 @@ app.use(cors({
   },
   credentials: true,
 }));
+
+// Security headers
+app.use(helmet());
 
 // General middleware (after raw and CORS)
 app.use(express.json());

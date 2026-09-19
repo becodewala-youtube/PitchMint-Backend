@@ -17,6 +17,9 @@ router.get('/balance', protect, getCreditBalance);
 router.post('/purchase', protect, purchaseCredits);
 router.post('/create-checkout-session', protect, purchaseCredits); // Alias for backward compatibility
 router.post('/verify-payment', protect, verifyPayment);
-router.post('/simulate-payment-success', protect, simulatePaymentSuccess);
+
+if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
+  router.post('/simulate-payment-success', protect, simulatePaymentSuccess);
+}
 
 export default router;

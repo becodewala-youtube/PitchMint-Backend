@@ -10,7 +10,6 @@ import pitchSimulatorRoutes from '../modules/pitch-simulator/pitch-simulator.rou
 import creditRoutes from '../modules/credits/credit.routes';
 import marketResearchRoutes from '../modules/market-research/market-research.routes';
 import dashboardRoutes from '../modules/dashboard/dashboard.routes';
-import { processRazorpayWebhook } from '../modules/payments/payment.webhook';
 
 const router = Router();
 
@@ -26,8 +25,5 @@ router.use('/api/pitch-simulator', pitchSimulatorRoutes);
 router.use('/api/credits', creditRoutes);
 router.use('/api/market-research', marketResearchRoutes);
 router.use('/api/history', dashboardRoutes);
-
-// Mount top-level Razorpay webhook endpoint
-router.post('/razorpay-webhook', processRazorpayWebhook);
 
 export default router;

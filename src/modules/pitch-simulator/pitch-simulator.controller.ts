@@ -1,10 +1,10 @@
 import { Request, Response } from 'express';
 import Idea from '../ideas/idea.model';
 import User from '../users/user.model';
-import CreditTransaction from '../credits/credit.model';
 import { simulateInvestorQA } from '../../shared/integrations/gemini/gemini.client';
 import logger from '../../config/logger';
 import { logActivity } from '../../shared/utils/activity-logger';
+import { atomicDeductCredits, refundCredits } from '../../shared/middleware/credit.middleware';
 
 export const simulatePitch = async (req: Request, res: Response): Promise<any> => {
   try {
@@ -12,45 +12,42 @@ export const simulatePitch = async (req: Request, res: Response): Promise<any> =
     const idea = await Idea.findById(id);
 
     if (!idea) {
-      return res.status(404).json({ message: 'Idea not found' });
+      return res.status(404).json({ success: false, message: 'Idea not found' });
     }
 
     // Check if the idea belongs to the user
     if (idea.userId.toString() !== req.user?._id?.toString()) {
-      return res.status(403).json({ message: 'Not authorized to access this idea' });
+      return res.status(403).json({ success: false, message: 'Not authorized to access this idea' });
     }
 
     // Only generate new questions if explicitly requested
     if (!idea.pitchSimulation?.questions || req.query.regenerate === 'true') {
-      const questions = await simulateInvestorQA(idea.ideaText);
-      
-      idea.pitchSimulation = {
-        questions: questions.questions.map((q: any, index: number) => ({
-          id: `question_${index}`,
-          question: q.question,
-          category: q.category,
-          answer: '',
-          feedback: null
-        }))
-      };
-      await idea.save();
+      // Atomically deduct credits before external API call
+      const deduction = await atomicDeductCredits(req.user._id, 1, 'pitch_simulator');
+      if (!deduction.success) {
+        return res.status(402).json({ success: false, message: 'Insufficient credits' });
+      }
+
+      try {
+        const questions = await simulateInvestorQA(idea.ideaText);
+        idea.pitchSimulation = {
+          questions: questions.questions.map((q: any, index: number) => ({
+            id: `question_${index}`,
+            question: q.question,
+            category: q.category,
+            answer: '',
+            feedback: null
+          }))
+        };
+        await idea.save();
+      } catch (opError) {
+        await refundCredits(req.user._id, deduction.split, 'pitch_simulator');
+        throw opError;
+      }
     }
 
-    // Deduct credits from database
-    const user = await User.findById(req.user._id);
-    if (user && user.credits >= 1) {
-      user.credits = Math.max(0, user.credits - 1);
-      await user.save();
-
-      // Record transaction
-      await CreditTransaction.create({
-        userId: user._id,
-        type: 'usage',
-        amount: -1,
-        description: 'Used 1 credit for pitch simulation',
-        relatedService: 'pitch_simulator'
-      });
-    }
+    // Get fresh user credits
+    const user = await User.findById(req.user._id).select('credits');
     
     res.json({
       ...idea.toObject(),
@@ -58,7 +55,7 @@ export const simulatePitch = async (req: Request, res: Response): Promise<any> =
     });
   } catch (error: any) {
     logger.error('Error simulating pitch:', error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -70,17 +67,17 @@ export const evaluateAnswer = async (req: Request, res: Response): Promise<any> 
     const idea = await Idea.findById(id);
 
     if (!idea) {
-      return res.status(404).json({ message: 'Idea not found' });
+      return res.status(404).json({ success: false, message: 'Idea not found' });
     }
 
     // Check if the idea belongs to the user
     if (idea.userId.toString() !== req.user?._id?.toString()) {
-      return res.status(403).json({ message: 'Not authorized to access this idea' });
+      return res.status(403).json({ success: false, message: 'Not authorized to access this idea' });
     }
 
     const question = idea.pitchSimulation?.questions?.find(q => q.id === questionId);
     if (!question) {
-      return res.status(404).json({ message: 'Question not found' });
+      return res.status(404).json({ success: false, message: 'Question not found' });
     }
 
     const feedback = await simulateInvestorQA(idea.ideaText, question.question, answer);
@@ -108,10 +105,10 @@ export const evaluateAnswer = async (req: Request, res: Response): Promise<any> 
     logger.error('Error evaluating answer:', error);
 
     if (error.message && error.message.includes('Failed to process pitch simulation')) {
-      return res.status(503).json({ message: 'Service temporarily unavailable. Please try again shortly.' });
+      return res.status(503).json({ success: false, message: 'Service temporarily unavailable. Please try again shortly.' });
     }
 
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -120,41 +117,40 @@ export const simulatePitchRandom = async (req: Request, res: Response): Promise<
     const { pitch } = req.body;
 
     if (!pitch) {
-      return res.status(400).json({ message: 'Please provide your pitch' });
+      return res.status(400).json({ success: false, message: 'Please provide your pitch' });
     }
 
     if (!req.user?._id) {
-      return res.status(401).json({ message: 'Not authorized' });
+      return res.status(401).json({ success: false, message: 'Not authorized' });
     }
 
-    const questions = await simulateInvestorQA(pitch);
-
-    // Log activity for random pitch simulation
-    await logActivity(
-      req.user._id,
-      'pitch_simulator',
-      `Pitch Simulation (Ad-hoc)`,
-      'Generated investor-style Q&A for standalone pitch',
-      questions,
-      1,
-      null
-    );
-
-    // Deduct credits from database
-    const user = await User.findById(req.user._id);
-    if (user && user.credits >= 1) {
-      user.credits = Math.max(0, user.credits - 1);
-      await user.save();
-
-      // Record transaction
-      await CreditTransaction.create({
-        userId: user._id,
-        type: 'usage',
-        amount: -1,
-        description: 'Used 1 credit for pitch simulation',
-        relatedService: 'pitch_simulator'
-      });
+    // Atomically deduct credits before external API call
+    const deduction = await atomicDeductCredits(req.user._id, 1, 'pitch_simulator');
+    if (!deduction.success) {
+      return res.status(402).json({ success: false, message: 'Insufficient credits' });
     }
+
+    let questions;
+    try {
+      questions = await simulateInvestorQA(pitch);
+
+      // Log activity for random pitch simulation
+      await logActivity(
+        req.user._id,
+        'pitch_simulator',
+        `Pitch Simulation (Ad-hoc)`,
+        'Generated investor-style Q&A for standalone pitch',
+        questions,
+        1,
+        null
+      );
+    } catch (opError) {
+      await refundCredits(req.user._id, deduction.split, 'pitch_simulator');
+      throw opError;
+    }
+
+    // Get fresh user credits
+    const user = await User.findById(req.user._id).select('credits');
     
     res.json({
       ...questions,
@@ -162,7 +158,7 @@ export const simulatePitchRandom = async (req: Request, res: Response): Promise<
     });
   } catch (error: any) {
     logger.error('Error simulating pitch:', error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -171,11 +167,11 @@ export const evaluateAnswerRandom = async (req: Request, res: Response): Promise
     const { pitch, question, answer } = req.body;
 
     if (!pitch || !question || !answer) {
-      return res.status(400).json({ message: 'Please provide pitch, question, and answer' });
+      return res.status(400).json({ success: false, message: 'Please provide pitch, question, and answer' });
     }
 
     if (!req.user?._id) {
-      return res.status(401).json({ message: 'Not authorized' });
+      return res.status(401).json({ success: false, message: 'Not authorized' });
     }
 
     const feedback = await simulateInvestorQA(pitch, question, answer);
@@ -193,7 +189,7 @@ export const evaluateAnswerRandom = async (req: Request, res: Response): Promise
     res.json(feedback);
   } catch (error: any) {
     logger.error('Error evaluating answer:', error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 

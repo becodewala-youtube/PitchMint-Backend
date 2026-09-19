@@ -12,6 +12,14 @@ export const authLimiter = rateLimit({
   message: 'Too many authentication attempts, please try again after 15 minutes'
 });
 
+export const strictAuthLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: process.env.NODE_ENV === 'development' ? 2000 : 5, // Only 5 attempts for reset/verify
+  message: 'Too many attempts, please try again after 15 minutes',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 export const pitchDeckLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
   max: 2, // Limit each IP to 2 pitch deck generations per minute
@@ -31,6 +39,7 @@ export const canvasLimiter = rateLimit({
 export default { 
   apiLimiter, 
   authLimiter, 
+  strictAuthLimiter,
   pitchDeckLimiter,
   canvasLimiter 
 };

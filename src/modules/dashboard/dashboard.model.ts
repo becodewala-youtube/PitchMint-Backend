@@ -5,7 +5,8 @@ const activityHistorySchema = new Schema<IActivityHistory>({
   userId: {
     type: Schema.Types.ObjectId,
     ref: 'User',
-    required: true
+    required: true,
+    index: true
   },
   serviceType: {
     type: String,

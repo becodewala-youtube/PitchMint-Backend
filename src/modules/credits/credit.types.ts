@@ -17,8 +17,13 @@ export interface ICreditTransaction extends Document {
   type: CreditTransactionType;
   amount: number;
   description: string;
+  deductedFrom?: {
+    monthly: number;
+    purchased: number;
+  };
   relatedService?: RelatedService;
   razorpayPaymentId?: string | null;
   razorpayOrderId?: string | null;
+  refundId?: string | null;
   createdAt: Date;
 }

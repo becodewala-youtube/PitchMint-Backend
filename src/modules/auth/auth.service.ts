@@ -5,8 +5,8 @@ import env from '../../config/env';
 const client = new OAuth2Client(env.GOOGLE_CLIENT_ID);
 
 export class AuthService {
-  generateToken(id: any): string {
-    return jwt.sign({ id }, env.JWT_SECRET, {
+  generateToken(id: any, tokenVersion: number = 0): string {
+    return jwt.sign({ id, tokenVersion }, env.JWT_SECRET, {
       expiresIn: env.JWT_EXPIRES_IN as any,
     });
   }

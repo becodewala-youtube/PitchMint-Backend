@@ -5,7 +5,8 @@ const ideaSchema = new Schema<IIdea>({
   userId: {
     type: Schema.Types.ObjectId,
     ref: 'User',
-    required: true
+    required: true,
+    index: true
   },
   ideaText: {
     type: String,

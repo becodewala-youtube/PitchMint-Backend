@@ -5,7 +5,8 @@ const creditTransactionSchema = new Schema<ICreditTransaction>({
   userId: {
     type: Schema.Types.ObjectId,
     ref: 'User',
-    required: true
+    required: true,
+    index: true
   },
   type: {
     type: String,
@@ -20,6 +21,10 @@ const creditTransactionSchema = new Schema<ICreditTransaction>({
     type: String,
     required: true
   },
+  deductedFrom: {
+    monthly: { type: Number },
+    purchased: { type: Number }
+  },
   relatedService: {
     type: String,
     enum: ['idea_validation', 'pitch_deck', 'canvas', 'competitor_analysis', 'pitch_simulator', 'market_research', 'investor_matching'],
@@ -27,11 +32,16 @@ const creditTransactionSchema = new Schema<ICreditTransaction>({
   },
   razorpayPaymentId: {
     type: String,
-    default: null
+    sparse: true,
+    unique: true
   },
   razorpayOrderId: {
+    type: String
+  },
+  refundId: {
     type: String,
-    default: null
+    sparse: true,
+    unique: true
   },
   createdAt: {
     type: Date,

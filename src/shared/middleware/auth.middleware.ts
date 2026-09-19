@@ -5,6 +5,7 @@ import env from '../../config/env';
 
 interface JwtPayload {
   id: string;
+  tokenVersion?: number;
 }
 
 export const protect = async (req: Request, res: Response, next: NextFunction): Promise<any> => {
@@ -32,6 +33,10 @@ export const protect = async (req: Request, res: Response, next: NextFunction): 
       
       if (!req.user) {
         return res.status(401).json({ message: 'User not found' });
+      }
+
+      if (decoded.tokenVersion !== undefined && req.user.tokenVersion !== decoded.tokenVersion) {
+        return res.status(401).json({ message: 'Token has been invalidated. Please log in again.' });
       }
       
       return next();
