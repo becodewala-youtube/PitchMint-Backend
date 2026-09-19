@@ -4,8 +4,8 @@ import User from '../users/user.model';
 import CreditTransaction from '../credits/credit.model';
 import razorpay from '../../shared/integrations/razorpay/razorpay.client';
 import env from '../../config/env';
+import { processSuccessfulPayment } from '../credits/credit.service';
 import logger from '../../config/logger';
-
 export async function handlePaymentCaptured(payment: any): Promise<void> {
   try {
     logger.info('✅ Payment captured:', {
@@ -20,30 +20,14 @@ export async function handlePaymentCaptured(payment: any): Promise<void> {
     const { userId, planId, credits, type } = order.notes;
 
     if (type === 'credit_purchase') {
-      const existingTransaction = await CreditTransaction.findOne({
-        razorpayPaymentId: payment.id
-      });
-
-      if (existingTransaction) {
-        logger.info(`Payment ${payment.id} already processed`);
-        return;
-      }
-
-      const user = await User.findById(userId);
-      
-      if (user) {
-        user.credits = (user.credits || 0) + parseInt(credits, 10);
-        await user.save();
-
-        await CreditTransaction.create({
-          userId: user._id,
-          type: 'purchase',
-          amount: parseInt(credits, 10),
-          description: `Purchased ${credits} credits via webhook`,
-          razorpayPaymentId: payment.id,
-          razorpayOrderId: payment.order_id
-        });
-
+      const result = await processSuccessfulPayment(
+        userId,
+        parseInt(credits, 10),
+        `${credits} credits (webhook)`,
+        payment.id,
+        payment.order_id
+      );
+      if (result.success && !result.alreadyProcessed) {
         logger.info(`✅ Webhook: User ${userId} credited with ${credits} credits`);
       }
     } else if (type === 'premium_upgrade') {
@@ -103,7 +87,7 @@ export const processRazorpayWebhook = async (req: Request, res: Response): Promi
     
   } catch (err: any) {
     logger.error('❌ Razorpay webhook signature verification failed:', err.message);
-    return res.status(400).send(`Webhook Error: ${err.message}`);
+    return res.status(400).send('Webhook Error: Invalid signature or payload');
   }
 
   // Handle Razorpay events

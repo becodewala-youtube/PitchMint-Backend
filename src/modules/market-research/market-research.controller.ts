@@ -4,6 +4,7 @@ import CreditTransaction from '../credits/credit.model';
 import { generateMarketResearch } from '../../shared/integrations/gemini/gemini.client';
 import logger from '../../config/logger';
 import { logActivity } from '../../shared/utils/activity-logger';
+import { atomicDeductCredits, refundCredits } from '../../shared/middleware/credit.middleware';
 
 // @desc    Analyze market for startup idea
 // @route   POST /api/market-research/analyze
@@ -13,43 +14,41 @@ export const analyzeMarket = async (req: Request, res: Response): Promise<any> =
     const { ideaText, industry, targetRegion } = req.body;
 
     if (!ideaText || !industry || !targetRegion) {
-      return res.status(400).json({ 
-        message: 'Please provide startup idea, industry, and target region' 
+      return res.status(400).json({ success: false, message: 'Please provide startup idea, industry, and target region' 
       });
     }
 
     if (!req.user?._id) {
-      return res.status(401).json({ message: 'Not authorized' });
+      return res.status(401).json({ success: false, message: 'Not authorized' });
     }
 
-    // Generate market research
-    const marketData = await generateMarketResearch(ideaText, industry, targetRegion);
+    // Atomically deduct credits before external API call
+    const deduction = await atomicDeductCredits(req.user._id, 2, 'market_research');
+    if (!deduction.success) {
+      return res.status(402).json({ success: false, message: 'Insufficient credits' });
+    }
 
-    // Log activity
-    await logActivity(
-      req.user._id,
-      'market_research',
-      `Market Research: ${ideaText.substring(0, 50)}...`,
-      `Generated TAM/SAM/SOM analysis for ${industry} in ${targetRegion}`,
-      marketData,
-      2
-    );
+    let marketData;
+    try {
+      // Generate market research
+      marketData = await generateMarketResearch(ideaText, industry, targetRegion);
 
-    // Deduct credits from database
+      // Log activity
+      await logActivity(
+        req.user._id,
+        'market_research',
+        `Market Research: ${ideaText.substring(0, 50)}...`,
+        `Generated TAM/SAM/SOM analysis for ${industry} in ${targetRegion}`,
+        marketData,
+        2
+      );
+    } catch (opError) {
+      await refundCredits(req.user._id, deduction.split, 'market_research');
+      throw opError;
+    }
+
+    // Get fresh user credits
     const user = await User.findById(req.user._id);
-    if (user && user.credits >= 2) {
-      user.credits = Math.max(0, user.credits - 2);
-      await user.save();
-
-      // Record transaction
-      await CreditTransaction.create({
-        userId: user._id,
-        type: 'usage',
-        amount: -2,
-        description: 'Used 2 credits for market research analysis',
-        relatedService: 'market_research'
-      });
-    }
 
     logger.info(`Generated market research for user ${req.user._id}`);
     res.json({
@@ -58,7 +57,7 @@ export const analyzeMarket = async (req: Request, res: Response): Promise<any> =
     });
   } catch (error: any) {
     logger.error('Error analyzing market:', error);
-    res.status(500).json({ message: 'Failed to analyze market' });
+    res.status(500).json({ success: false, message: 'Failed to analyze market' });
   }
 };
 

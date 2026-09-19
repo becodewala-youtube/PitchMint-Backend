@@ -3,7 +3,7 @@ import Idea from '../ideas/idea.model';
 import User from '../users/user.model';
 import { generatePitchDeck, generateTalkingPoints } from '../../shared/integrations/gemini/gemini.client';
 import logger from '../../config/logger';
-import CreditTransaction from '../credits/credit.model';
+import { atomicDeductCredits, refundCredits } from '../../shared/middleware/credit.middleware';
 
 // @desc    Generate a pitch deck for an idea
 // @route   POST /api/pitchdeck/:id
@@ -13,35 +13,33 @@ export const generatePitchDeckForIdea = async (req: Request, res: Response): Pro
     const idea = await Idea.findById(req.params.id);
 
     if (!idea) {
-      return res.status(404).json({ message: 'Idea not found' });
+      return res.status(404).json({ success: false, message: 'Idea not found' });
     }
 
     if (idea.userId.toString() !== req.user?._id?.toString()) {
-      return res.status(403).json({ message: 'Not authorized to access this idea' });
+      return res.status(403).json({ success: false, message: 'Not authorized to access this idea' });
     }
 
-    // Generate pitch deck
-    const pitchDeckContent = await generatePitchDeck(idea.ideaText, idea.analysis);
-    
-    // Update idea with pitch deck content
-    idea.pitchDeckContent = pitchDeckContent;
-    await idea.save();
-
-    // Deduct credits from database
-    const user = await User.findById(req.user._id);
-    if (user && user.credits >= 1) {
-      user.credits = Math.max(0, user.credits - 1);
-      await user.save();
-
-      // Record transaction
-      await CreditTransaction.create({
-        userId: user._id,
-        type: 'usage',
-        amount: -1,
-        description: 'Used 1 credit for pitch deck generation',
-        relatedService: 'pitch_deck'
-      });
+    // Atomically deduct credits before external API call
+    const deduction = await atomicDeductCredits(req.user._id, 1, 'pitch_deck');
+    if (!deduction.success) {
+      return res.status(402).json({ success: false, message: 'Insufficient credits' });
     }
+
+    try {
+      // Generate pitch deck
+      const pitchDeckContent = await generatePitchDeck(idea.ideaText, idea.analysis);
+      
+      // Update idea with pitch deck content
+      idea.pitchDeckContent = pitchDeckContent;
+      await idea.save();
+    } catch (opError) {
+      await refundCredits(req.user._id, deduction.split, 'pitch_deck');
+      throw opError;
+    }
+
+    // Get fresh user credits
+    const user = await User.findById(req.user._id).select('credits');
 
     logger.info(`Generated pitch deck for idea ${idea._id}`);
     res.json({
@@ -50,7 +48,7 @@ export const generatePitchDeckForIdea = async (req: Request, res: Response): Pro
     });
   } catch (error: any) {
     logger.error('Error generating pitch deck:', error);
-    res.status(500).json({ message: 'Failed to generate pitch deck' });
+    res.status(500).json({ success: false, message: 'Failed to generate pitch deck' });
   }
 };
 
@@ -63,15 +61,15 @@ export const generateTalkingPointsForSlide = async (req: Request, res: Response)
     const idea = await Idea.findById(req.params.id);
 
     if (!idea) {
-      return res.status(404).json({ message: 'Idea not found' });
+      return res.status(404).json({ success: false, message: 'Idea not found' });
     }
 
     if (idea.userId.toString() !== req.user?._id?.toString()) {
-      return res.status(403).json({ message: 'Not authorized to access this idea' });
+      return res.status(403).json({ success: false, message: 'Not authorized to access this idea' });
     }
 
     if (!idea.pitchDeckContent) {
-      return res.status(400).json({ message: 'No pitch deck content available' });
+      return res.status(400).json({ success: false, message: 'No pitch deck content available' });
     }
 
     const slides = [
@@ -115,7 +113,7 @@ export const generateTalkingPointsForSlide = async (req: Request, res: Response)
     res.json({ talkingPoints });
   } catch (error: any) {
     logger.error('Error generating talking points:', error);
-    res.status(500).json({ message: 'Failed to generate talking points' });
+    res.status(500).json({ success: false, message: 'Failed to generate talking points' });
   }
 };
 
@@ -127,23 +125,34 @@ export const regeneratePitchDeck = async (req: Request, res: Response): Promise<
     const idea = await Idea.findById(req.params.id);
 
     if (!idea) {
-      return res.status(404).json({ message: 'Idea not found' });
+      return res.status(404).json({ success: false, message: 'Idea not found' });
     }
 
     // Check if the idea belongs to the user
     if (idea.userId.toString() !== req.user?._id?.toString()) {
-      return res.status(403).json({ message: 'Not authorized to access this idea' });
+      return res.status(403).json({ success: false, message: 'Not authorized to access this idea' });
     }
 
-    // Generate new pitch deck
-    const pitchDeckContent = await generatePitchDeck(idea.ideaText, idea.analysis);
-    
-    // Update idea with new pitch deck content
-    idea.pitchDeckContent = pitchDeckContent;
-    await idea.save();
+    // Atomically deduct credits before external API call
+    const deduction = await atomicDeductCredits(req.user._id, 1, 'pitch_deck');
+    if (!deduction.success) {
+      return res.status(402).json({ success: false, message: 'Insufficient credits' });
+    }
+
+    try {
+      // Generate new pitch deck
+      const pitchDeckContent = await generatePitchDeck(idea.ideaText, idea.analysis);
+      
+      // Update idea with new pitch deck content
+      idea.pitchDeckContent = pitchDeckContent;
+      await idea.save();
+    } catch (opError) {
+      await refundCredits(req.user._id, deduction.split, 'pitch_deck');
+      throw opError;
+    }
 
     // Get updated user with current credits
-    const updatedUser = await User.findById(req.user._id);
+    const updatedUser = await User.findById(req.user._id).select('credits');
 
     logger.info(`Regenerated pitch deck for idea ${idea._id}`);
     res.json({
@@ -152,7 +161,7 @@ export const regeneratePitchDeck = async (req: Request, res: Response): Promise<
     });
   } catch (error: any) {
     logger.error('Error regenerating pitch deck:', error);
-    res.status(500).json({ message: 'Failed to regenerate pitch deck' });
+    res.status(500).json({ success: false, message: 'Failed to regenerate pitch deck' });
   }
 };
 
@@ -165,11 +174,11 @@ export const updateSlideContent = async (req: Request, res: Response): Promise<a
     const idea = await Idea.findById(req.params.id);
 
     if (!idea || idea.userId.toString() !== req.user?._id?.toString()) {
-      return res.status(404).json({ message: 'Idea not found or unauthorized' });
+      return res.status(404).json({ success: false, message: 'Idea not found or unauthorized' });
     }
 
     if (!idea.pitchDeckContent) {
-      return res.status(400).json({ message: 'No pitch deck content available' });
+      return res.status(400).json({ success: false, message: 'No pitch deck content available' });
     }
 
     // Update the specific slide content
@@ -192,7 +201,7 @@ export const updateSlideContent = async (req: Request, res: Response): Promise<a
     res.json({ message: 'Slide updated successfully' });
   } catch (error: any) {
     logger.error('Error updating slide:', error);
-    res.status(500).json({ message: 'Failed to update slide' });
+    res.status(500).json({ success: false, message: 'Failed to update slide' });
   }
 };
 
@@ -205,7 +214,7 @@ export const addComment = async (req: Request, res: Response): Promise<any> => {
     const idea = await Idea.findById(req.params.id);
 
     if (!idea || idea.userId.toString() !== req.user?._id?.toString()) {
-      return res.status(404).json({ message: 'Idea not found or unauthorized' });
+      return res.status(404).json({ success: false, message: 'Idea not found or unauthorized' });
     }
 
     if (!idea.collaborativeData) {
@@ -229,7 +238,7 @@ export const addComment = async (req: Request, res: Response): Promise<any> => {
     res.json({ comment });
   } catch (error: any) {
     logger.error('Error adding comment:', error);
-    res.status(500).json({ message: 'Failed to add comment' });
+    res.status(500).json({ success: false, message: 'Failed to add comment' });
   }
 };
 
@@ -242,7 +251,7 @@ export const deleteComment = async (req: Request, res: Response): Promise<any> =
     const idea = await Idea.findById(req.params.id);
 
     if (!idea || idea.userId.toString() !== req.user?._id?.toString()) {
-      return res.status(404).json({ message: 'Idea not found or unauthorized' });
+      return res.status(404).json({ success: false, message: 'Idea not found or unauthorized' });
     }
 
     if (idea.collaborativeData?.comments) {
@@ -256,7 +265,7 @@ export const deleteComment = async (req: Request, res: Response): Promise<any> =
     res.json({ message: 'Comment deleted successfully' });
   } catch (error: any) {
     logger.error('Error deleting comment:', error);
-    res.status(500).json({ message: 'Failed to delete comment' });
+    res.status(500).json({ success: false, message: 'Failed to delete comment' });
   }
 };
 
@@ -268,7 +277,7 @@ export const processVoiceFeedback = async (req: Request, res: Response): Promise
     const audioFile = req.file;
 
     if (!audioFile) {
-      return res.status(400).json({ message: 'No audio file provided' });
+      return res.status(400).json({ success: false, message: 'No audio file provided' });
     }
 
     // Process audio file from memory buffer
@@ -299,7 +308,7 @@ export const processVoiceFeedback = async (req: Request, res: Response): Promise
     res.json(mockFeedback);
   } catch (error: any) {
     logger.error('Error processing voice feedback:', error);
-    res.status(500).json({ message: 'Failed to process voice feedback' });
+    res.status(500).json({ success: false, message: 'Failed to process voice feedback' });
   }
 };
 

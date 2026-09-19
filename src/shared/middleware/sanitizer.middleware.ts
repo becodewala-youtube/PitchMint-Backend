@@ -1,9 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
-import xss from 'xss-clean';
+import mongoSanitize from 'express-mongo-sanitize';
 import { validationResult } from 'express-validator';
 
-// Middleware to sanitize user input
-export const sanitizeInput = xss();
+// Middleware to sanitize user input (NoSQL injection prevention)
+export const sanitizeInput = mongoSanitize();
 
 // Middleware to handle validation errors
 export const handleValidationErrors = (req: Request, res: Response, next: NextFunction): any => {

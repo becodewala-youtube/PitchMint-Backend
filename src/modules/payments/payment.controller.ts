@@ -127,6 +127,14 @@ export const verifyPremiumPayment = async (req: Request, res: Response): Promise
     const order: any = await razorpay.orders.fetch(razorpay_order_id);
     const payment: any = await razorpay.payments.fetch(razorpay_payment_id);
 
+    if (payment.order_id !== razorpay_order_id) {
+      console.error('❌ Order ID mismatch in premium payment verification');
+      return res.status(400).json({ 
+        success: false,
+        message: 'Payment order mismatch'
+      });
+    }
+
     if (payment.status !== 'captured') {
       console.warn(`Payment not captured. Status: ${payment.status}`);
       return res.status(400).json({ 
@@ -204,10 +212,10 @@ export const verifyPremiumPayment = async (req: Request, res: Response): Promise
 // @access  Private
 export const simulatePremiumUpgrade = async (req: Request, res: Response): Promise<any> => {
   try {
-    if (env.NODE_ENV !== 'development') {
+    if (process.env.NODE_ENV !== 'development' && process.env.NODE_ENV !== 'test') {
       return res.status(403).json({
         success: false,
-        message: 'Demo payments are only available in development mode'
+        message: 'Demo payments are only available in development or test mode'
       });
     }
 

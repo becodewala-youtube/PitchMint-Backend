@@ -16,7 +16,7 @@ export const registerUser = async (req: Request, res: Response): Promise<any> =>
     const userExists = await User.findOne({ email });
 
     if (userExists) {
-      return res.status(400).json({ message: 'User already exists' });
+      return res.status(400).json({ success: false, message: 'User already exists' });
     }
 
     // Create user
@@ -38,14 +38,13 @@ export const registerUser = async (req: Request, res: Response): Promise<any> =>
       logger.error('Failed to send verification email:', emailError);
     }
 
-    res.status(201).json({
-      message: 'User registered successfully. Please check your email for verification code.',
+    res.status(201).json({ success: false, message: 'User registered successfully. Please check your email for verification code.',
       userId: user._id,
       emailSent: true
     });
   } catch (error: any) {
     logger.error('Registration error:', error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -63,7 +62,7 @@ export const verifyEmail = async (req: Request, res: Response): Promise<any> => 
     });
 
     if (!user) {
-      return res.status(400).json({ message: 'Invalid or expired verification token' });
+      return res.status(400).json({ success: false, message: 'Invalid or expired verification token' });
     }
 
     user.isEmailVerified = true;
@@ -80,7 +79,7 @@ export const verifyEmail = async (req: Request, res: Response): Promise<any> => 
 
     res.json({
       message: 'Email verified successfully',
-      token: authService.generateToken(user._id),
+      token: authService.generateToken(user._id, user.tokenVersion),
       user: {
         _id: user._id,
         name: user.name,
@@ -93,7 +92,7 @@ export const verifyEmail = async (req: Request, res: Response): Promise<any> => 
     });
   } catch (error: any) {
     logger.error('Email verification error:', error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -107,18 +106,23 @@ export const resendVerification = async (req: Request, res: Response): Promise<a
     const user = await User.findOne({ email, isEmailVerified: false });
 
     if (!user) {
-      return res.status(400).json({ message: 'User not found or already verified' });
+      return res.status(400).json({ success: false, message: 'User not found or already verified' });
     }
 
     const verificationToken = user.generateEmailVerificationToken();
     await user.save();
 
-    await sendEmailVerification(email, user.name, verificationToken);
+    try {
+      await sendEmailVerification(email, user.name, verificationToken);
+    } catch (emailError) {
+      logger.error('Failed to resend verification email:', emailError);
+      return res.status(500).json({ success: false, message: 'Failed to send verification email. Please try again later.' });
+    }
 
     res.json({ message: 'Verification email sent successfully' });
   } catch (error: any) {
     logger.error('Resend verification error:', error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -130,28 +134,26 @@ export const loginUser = async (req: Request, res: Response): Promise<any> => {
     const { email, password } = req.body;
 
     if (!email || !password) {
-      return res.status(400).json({ message: 'Email and password are required' });
+      return res.status(400).json({ success: false, message: 'Email and password are required' });
     }
 
     // Check for user email
     const user = await User.findOne({ email }).select('+password');
 
     if (!user) {
-      return res.status(401).json({ message: 'Invalid credentials' });
+      return res.status(401).json({ success: false, message: 'Invalid credentials' });
     }
 
     // Check if email is verified
     if (!user.isEmailVerified) {
-      return res.status(401).json({ 
-        message: 'Please verify your email before logging in',
+      return res.status(401).json({ success: false, message: 'Please verify your email before logging in',
         emailNotVerified: true,
         email: user.email
       });
     }
 
     if (!user.password) {
-      return res.status(401).json({
-        message: 'This account uses Google sign-in. Please continue with Google.'
+      return res.status(401).json({ success: false, message: 'This account uses Google sign-in. Please continue with Google.'
       });
     }
 
@@ -159,15 +161,16 @@ export const loginUser = async (req: Request, res: Response): Promise<any> => {
     const isMatch = await user.matchPassword(password);
 
     if (!isMatch) {
-      return res.status(401).json({ message: 'Invalid credentials' });
+      return res.status(401).json({ success: false, message: 'Invalid credentials' });
     }
 
     // Reset monthly credits if needed
-    user.resetMonthlyCredits();
-    await user.save();
+    if (typeof user.checkAndResetMonthlyCredits === 'function') {
+      await user.checkAndResetMonthlyCredits();
+    }
 
     res.json({
-      token: authService.generateToken(user._id),
+      token: authService.generateToken(user._id, user.tokenVersion),
       user: {
         _id: user._id,
         name: user.name,
@@ -181,7 +184,7 @@ export const loginUser = async (req: Request, res: Response): Promise<any> => {
     });
   } catch (error: any) {
     logger.error('Login error:', error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -195,7 +198,7 @@ export const googleAuth = async (req: Request, res: Response): Promise<any> => {
     // Verify Google token
     const payload = await authService.verifyGoogleToken(credential);
     if (!payload) {
-      return res.status(400).json({ message: 'Invalid Google credential' });
+      return res.status(400).json({ success: false, message: 'Invalid Google credential' });
     }
 
     const { sub: googleId, email, name, picture } = payload;
@@ -236,11 +239,12 @@ export const googleAuth = async (req: Request, res: Response): Promise<any> => {
     }
 
     // Reset monthly credits if needed
-    user.resetMonthlyCredits();
-    await user.save();
+    if (typeof user.checkAndResetMonthlyCredits === 'function') {
+      await user.checkAndResetMonthlyCredits();
+    }
 
     res.json({
-      token: authService.generateToken(user._id),
+      token: authService.generateToken(user._id, user.tokenVersion),
       user: {
         _id: user._id,
         name: user.name,
@@ -254,7 +258,7 @@ export const googleAuth = async (req: Request, res: Response): Promise<any> => {
     });
   } catch (error: any) {
     logger.error('Google auth error:', error);
-    res.status(500).json({ message: 'Google authentication failed' });
+    res.status(500).json({ success: false, message: 'Google authentication failed' });
   }
 };
 
@@ -268,18 +272,23 @@ export const forgotPassword = async (req: Request, res: Response): Promise<any> 
     const user = await User.findOne({ email });
 
     if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+      return res.status(404).json({ success: false, message: 'User not found' });
     }
 
     const resetToken = user.generatePasswordResetToken();
     await user.save();
 
-    await sendPasswordReset(email, user.name, resetToken);
+    try {
+      await sendPasswordReset(email, user.name, resetToken);
+    } catch (emailError) {
+      logger.error('Failed to send password reset email:', emailError);
+      return res.status(500).json({ success: false, message: 'Failed to send password reset email. Please try again later.' });
+    }
 
     res.json({ message: 'Password reset code sent to your email' });
   } catch (error: any) {
     logger.error('Forgot password error:', error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -297,10 +306,11 @@ export const resetPassword = async (req: Request, res: Response): Promise<any> =
     });
 
     if (!user) {
-      return res.status(400).json({ message: 'Invalid or expired reset token' });
+      return res.status(400).json({ success: false, message: 'Invalid or expired reset token' });
     }
 
     user.password = newPassword;
+    user.tokenVersion = (user.tokenVersion || 0) + 1; // Invalidate old tokens
     user.passwordResetToken = null;
     user.passwordResetExpires = null;
     await user.save();
@@ -308,7 +318,7 @@ export const resetPassword = async (req: Request, res: Response): Promise<any> =
     res.json({ message: 'Password reset successfully' });
   } catch (error: any) {
     logger.error('Reset password error:', error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -321,8 +331,9 @@ export const getUserProfile = async (req: Request, res: Response): Promise<any> 
 
     if (user) {
       // Reset monthly credits if needed
-      user.resetMonthlyCredits();
-      await user.save();
+      if (typeof user.checkAndResetMonthlyCredits === 'function') {
+        await user.checkAndResetMonthlyCredits();
+      }
 
       res.json({
         _id: user._id,
@@ -336,11 +347,11 @@ export const getUserProfile = async (req: Request, res: Response): Promise<any> 
         authProvider: user.authProvider
       });
     } else {
-      res.status(404).json({ message: 'User not found' });
+      res.status(404).json({ success: false, message: 'User not found' });
     }
   } catch (error: any) {
     logger.error('Get profile error:', error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -349,7 +360,7 @@ export const getUserProfile = async (req: Request, res: Response): Promise<any> 
 // @access  Private
 export const updateUserProfile = async (req: Request, res: Response): Promise<any> => {
   try {
-    const user = await User.findById(req.user?._id);
+    const user = await User.findById(req.user?._id).select('+password');
 
     if (user) {
       user.name = req.body.name || user.name;
@@ -376,7 +387,17 @@ export const updateUserProfile = async (req: Request, res: Response): Promise<an
       }
       
       if (req.body.password && user.authProvider === 'local') {
+        if (!req.body.currentPassword) {
+          return res.status(400).json({ success: false, message: 'Current password is required to set a new password' });
+        }
+        
+        const isMatch = await user.matchPassword(req.body.currentPassword);
+        if (!isMatch) {
+          return res.status(401).json({ success: false, message: 'Incorrect current password' });
+        }
+
         user.password = req.body.password;
+        user.tokenVersion = (user.tokenVersion || 0) + 1; // Invalidate old tokens
       }
 
       const updatedUser = await user.save();
@@ -392,11 +413,11 @@ export const updateUserProfile = async (req: Request, res: Response): Promise<an
         profilePicture: updatedUser.profilePicture
       });
     } else {
-      res.status(404).json({ message: 'User not found' });
+      res.status(404).json({ success: false, message: 'User not found' });
     }
   } catch (error: any) {
     logger.error('Update profile error:', error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -406,13 +427,13 @@ export const updateUserProfile = async (req: Request, res: Response): Promise<an
 export const uploadProfilePicture = async (req: Request, res: Response): Promise<any> => {
   try {
     if (!req.file) {
-      return res.status(400).json({ message: 'No file uploaded' });
+      return res.status(400).json({ success: false, message: 'No file uploaded' });
     }
 
     const user = await User.findById(req.user?._id);
     
     if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+      return res.status(404).json({ success: false, message: 'User not found' });
     }
 
     // Delete old profile picture from Cloudinary if exists
@@ -437,7 +458,7 @@ export const uploadProfilePicture = async (req: Request, res: Response): Promise
     });
   } catch (error: any) {
     logger.error('Upload avatar error:', error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 

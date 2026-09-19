@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import User from '../users/user.model';
 import CreditTransaction from './credit.model';
 import razorpay from '../../shared/integrations/razorpay/razorpay.client';
+import { processSuccessfulPayment } from './credit.service';
 import logger from '../../config/logger';
 import env from '../../config/env';
 import { CREDIT_PLANS } from '../../shared/constants/credit-plans';
@@ -32,7 +33,7 @@ export const getCreditHistory = async (req: Request, res: Response): Promise<any
     const { page = 1, limit = 10 } = req.query as { page?: string | number; limit?: string | number };
     
     if (!req.user?._id) {
-      return res.status(401).json({ message: 'Not authorized' });
+      return res.status(401).json({ success: false, message: 'Not authorized' });
     }
 
     const pageNum = Number(page);
@@ -305,6 +306,18 @@ export const verifyPayment = async (req: Request, res: Response): Promise<any> =
       });
     }
 
+    if (payment.order_id !== razorpay_order_id) {
+      logger.error('Order ID mismatch in payment verification:', {
+        paymentOrderId: payment.order_id,
+        requestOrderId: razorpay_order_id
+      });
+      return res.status(400).json({ 
+        success: false,
+        message: 'Payment order mismatch',
+        code: 'ORDER_MISMATCH'
+      });
+    }
+
     // Check payment status
     if (payment.status !== 'captured') {
       logger.warn(`Payment not captured. Status: ${payment.status}`);
@@ -342,49 +355,43 @@ export const verifyPayment = async (req: Request, res: Response): Promise<any> =
       });
     }
 
-    // Check for duplicate processing
-    const existingTransaction = await CreditTransaction.findOne({
-      razorpayPaymentId: razorpay_payment_id
-    });
+    // Check for duplicate processing and record transaction using unified service
+    const result = await processSuccessfulPayment(
+      userId,
+      parseInt(credits, 10),
+      plan.name,
+      razorpay_payment_id,
+      razorpay_order_id
+    );
 
-    if (existingTransaction) {
-      logger.info(`Payment ${razorpay_payment_id} already processed`);
-      return res.status(400).json({ 
+    if (!result.success) {
+      return res.status(500).json({ 
         success: false,
-        message: 'Payment already processed',
-        code: 'DUPLICATE_PAYMENT',
-        credits: user.credits
+        message: 'Payment verification failed during user update.',
+        code: 'USER_UPDATE_FAILED'
       });
     }
 
-    // Process the payment - Add credits to user account
-    const creditsToAdd = parseInt(credits, 10);
-    const previousCredits = user.credits || 0;
-    user.credits = previousCredits + creditsToAdd;
-    await user.save();
-
-    // Record transaction
-    await CreditTransaction.create({
-      userId: user._id,
-      type: 'purchase',
-      amount: creditsToAdd,
-      description: `Purchased ${plan.name}`,
-      razorpayPaymentId: razorpay_payment_id,
-      razorpayOrderId: razorpay_order_id
-    });
+    if (result.alreadyProcessed) {
+      return res.json({ 
+        success: true,
+        message: 'Payment verified successfully (already processed)',
+        credits: result.user.credits
+      });
+    }
 
     logger.info(`✅ Payment verified successfully:`, {
-      userId: user._id,
+      userId: result.user._id,
       paymentId: razorpay_payment_id,
-      creditsAdded: creditsToAdd,
-      totalCredits: user.credits
+      creditsAdded: parseInt(credits, 10),
+      totalCredits: result.user.credits
     });
 
     res.json({
       success: true,
       message: 'Credits purchased successfully',
-      credits: user.credits,
-      purchased: creditsToAdd,
+      credits: result.user.credits,
+      purchased: parseInt(credits, 10),
       planName: plan.name,
       transactionId: razorpay_payment_id
     });
@@ -421,9 +428,8 @@ export const getCreditBalance = async (req: Request, res: Response): Promise<any
     }
 
     // Reset monthly credits if needed
-    if (typeof user.resetMonthlyCredits === 'function') {
-      user.resetMonthlyCredits();
-      await user.save();
+    if (typeof user.checkAndResetMonthlyCredits === 'function') {
+      await user.checkAndResetMonthlyCredits();
     }
 
     res.json({
@@ -447,10 +453,10 @@ export const getCreditBalance = async (req: Request, res: Response): Promise<any
 // @access  Private
 export const simulatePaymentSuccess = async (req: Request, res: Response): Promise<any> => {
   try {
-    if (env.NODE_ENV !== 'development') {
+    if (process.env.NODE_ENV !== 'development' && process.env.NODE_ENV !== 'test') {
       return res.status(403).json({ 
         success: false,
-        message: 'This endpoint is only available in development mode',
+        message: 'This endpoint is only available in development or test mode',
         code: 'DEVELOPMENT_ONLY'
       });
     }
@@ -476,9 +482,8 @@ export const simulatePaymentSuccess = async (req: Request, res: Response): Promi
       });
     }
 
-    // Add credits (simulation)
-    const previousCredits = user.credits || 0;
-    user.credits = previousCredits + plan.credits;
+    // Add credits to purchasedCredits under Credit Model V2
+    user.purchasedCredits = (user.purchasedCredits || 0) + plan.credits;
     await user.save();
 
     // Record transaction

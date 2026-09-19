@@ -5,6 +5,7 @@ import CreditTransaction from '../credits/credit.model';
 import { generateCompetitorAnalysis } from '../../shared/integrations/gemini/gemini.client';
 import logger from '../../config/logger';
 import { logActivity } from '../../shared/utils/activity-logger';
+import { atomicDeductCredits, refundCredits } from '../../shared/middleware/credit.middleware';
 
 export const analyzeCompetitors = async (req: Request, res: Response): Promise<any> => {
   try {
@@ -14,12 +15,12 @@ export const analyzeCompetitors = async (req: Request, res: Response): Promise<a
     const idea = await Idea.findById(id);
 
     if (!idea) {
-      return res.status(404).json({ message: 'Idea not found' });
+      return res.status(404).json({ success: false, message: 'Idea not found' });
     }
 
     // Check if the idea belongs to the user
     if (idea.userId.toString() !== req.user?._id?.toString()) {
-      return res.status(403).json({ message: 'Not authorized to access this idea' });
+      return res.status(403).json({ success: false, message: 'Not authorized to access this idea' });
     }
 
     // If regenerate is false and we have existing analysis, return it
@@ -27,54 +28,46 @@ export const analyzeCompetitors = async (req: Request, res: Response): Promise<a
       return res.json({ competitorAnalysis: idea.competitorAnalysis });
     }
 
-    // Check user credits before proceeding
-    const user = await User.findById(req.user._id);
-    if (!user || user.credits < 1) {
-      return res.status(402).json({ 
-        message: 'Insufficient credits',
-        creditsRequired: 1,
-        creditsAvailable: user ? user.credits : 0
-      });
+    // Atomically deduct credits before external API call
+    const deduction = await atomicDeductCredits(req.user._id, 1, 'competitor_analysis');
+    if (!deduction.success) {
+      return res.status(402).json({ success: false, message: 'Insufficient credits' });
     }
 
-    // Generate new analysis
-    const analysis = await generateCompetitorAnalysis(idea.ideaText);
-    
-    // Save the analysis to the database
-    idea.competitorAnalysis = analysis;
-    await idea.save();
+    let analysis;
+    try {
+      // Generate new analysis
+      analysis = await generateCompetitorAnalysis(idea.ideaText);
+      
+      // Save the analysis to the database
+      idea.competitorAnalysis = analysis;
+      await idea.save();
 
-    // Log activity
-    await logActivity(
-      user._id,
-      'competitor_analysis',
-      `Competitor Analysis: ${idea.ideaText.substring(0, 50)}...`,
-      'Generated comprehensive competitor analysis with SWOT analysis',
-      analysis,
-      1,
-      idea._id
-    );
+      // Log activity
+      await logActivity(
+        req.user._id,
+        'competitor_analysis',
+        `Competitor Analysis: ${idea.ideaText.substring(0, 50)}...`,
+        'Generated comprehensive competitor analysis with SWOT analysis',
+        analysis,
+        1,
+        idea._id
+      );
+    } catch (opError) {
+      await refundCredits(req.user._id, deduction.split, 'competitor_analysis');
+      throw opError;
+    }
 
-    // Deduct credits from database
-    user.credits = Math.max(0, user.credits - 1);
-    await user.save();
-
-    // Record transaction
-    await CreditTransaction.create({
-      userId: user._id,
-      type: 'usage',
-      amount: -1,
-      description: 'Used 1 credit for competitor analysis',
-      relatedService: 'competitor_analysis'
-    });
+    // Get fresh user credits
+    const user = await User.findById(req.user._id);
     
     res.json({ 
       competitorAnalysis: analysis,
-      userCredits: user.credits
+      userCredits: user ? user.credits : 0
     });
   } catch (error: any) {
     logger.error('Error analyzing competitors:', error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -83,14 +76,26 @@ export const analyzeCompetitorsRandom = async (req: Request, res: Response): Pro
     const { ideaText } = req.body;
 
     if (!ideaText) {
-      return res.status(400).json({ message: 'Please provide your startup idea' });
+      return res.status(400).json({ success: false, message: 'Please provide your startup idea' });
     }
 
     if (!req.user?._id) {
-      return res.status(401).json({ message: 'Not authorized' });
+      return res.status(401).json({ success: false, message: 'Not authorized' });
     }
 
-    const analysis = await generateCompetitorAnalysis(ideaText);
+    // Atomically deduct credits before external API call
+    const deduction = await atomicDeductCredits(req.user._id, 1, 'competitor_analysis');
+    if (!deduction.success) {
+      return res.status(402).json({ success: false, message: 'Insufficient credits' });
+    }
+
+    let analysis;
+    try {
+      analysis = await generateCompetitorAnalysis(ideaText);
+    } catch (apiError) {
+      await refundCredits(req.user._id, deduction.split, 'competitor_analysis');
+      throw apiError;
+    }
 
     // Log activity for random competitor analysis
     await logActivity(
@@ -103,21 +108,8 @@ export const analyzeCompetitorsRandom = async (req: Request, res: Response): Pro
       null
     );
 
-    // Deduct credits from database
+    // Get fresh user credits
     const user = await User.findById(req.user._id);
-    if (user && user.credits >= 1) {
-      user.credits = Math.max(0, user.credits - 1);
-      await user.save();
-
-      // Record transaction
-      await CreditTransaction.create({
-        userId: user._id,
-        type: 'usage',
-        amount: -1,
-        description: 'Used 1 credit for competitor analysis',
-        relatedService: 'competitor_analysis'
-      });
-    }
     
     res.json({ 
       ...analysis,
@@ -125,7 +117,7 @@ export const analyzeCompetitorsRandom = async (req: Request, res: Response): Pro
     });
   } catch (error: any) {
     logger.error('Error analyzing competitors:', error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
