@@ -12,7 +12,9 @@
     "seed": "tsx scripts/seed/seed-investors.ts",
     "lint": "eslint \"src/**/*.ts\"",
     "lint:fix": "eslint \"src/**/*.ts\" --fix",
-    "test": "jest"
+    "test": "jest",
+    "test:unit": "jest --testPathPatterns=\"src/\"",
+    "test:integration": "jest --testPathPatterns=\"tests/integration/\" --maxWorkers=2"
   },
   "dependencies": {
     "@google/generative-ai": "^0.2.1",

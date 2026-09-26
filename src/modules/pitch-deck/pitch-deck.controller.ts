@@ -39,7 +39,10 @@ export const generatePitchDeckForIdea = async (req: Request, res: Response): Pro
     }
 
     // Get fresh user credits
-    const user = await User.findById(req.user._id).select('credits');
+    const userQuery = User.findById(req.user._id);
+    const user = userQuery && typeof (userQuery as any).select === 'function'
+      ? await (userQuery as any).select('credits monthlyCredits purchasedCredits')
+      : await userQuery;
 
     logger.info(`Generated pitch deck for idea ${idea._id}`);
     res.json({
