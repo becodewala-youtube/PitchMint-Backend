@@ -13,17 +13,11 @@ try {
     logger.info('✅ Razorpay initialized successfully');
   } else {
     logger.warn('⚠️ Razorpay credentials not fully configured');
-    razorpay = new Razorpay({
-      key_id: env.RAZORPAY_KEY_ID || '',
-      key_secret: env.RAZORPAY_KEY_SECRET || ''
-    });
+    razorpay = null;
   }
 } catch (error: any) {
   logger.error('❌ Failed to initialize Razorpay:', error.message);
-  razorpay = new Razorpay({
-    key_id: '',
-    key_secret: ''
-  });
+  razorpay = null;
 }
 
 export { razorpay };

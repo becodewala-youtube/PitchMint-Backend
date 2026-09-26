@@ -1,7 +1,7 @@
 {
-  "name": "ideaforge-backend",
+  "name": "pitchmint-backend",
   "version": "1.0.0",
-  "description": "Backend API for IdeaForge startup validation platform",
+  "description": "Backend API for pitchmint startup validation platform",
   "main": "dist/server.js",
   "type": "commonjs",
   "scripts": {

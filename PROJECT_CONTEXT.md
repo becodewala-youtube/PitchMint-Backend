@@ -1,7 +1,7 @@
 # PitchMint Backend Context
 
 ## 1. Project Purpose
-Backend API for PitchMint platform (IdeaForge startup validation).
+Backend API for PitchMint platform (pitchmint startup validation).
 
 ## 2. Technology Stack
 Node.js, Express, TypeScript, Mongoose, JWT, Cloudinary, Razorpay.
