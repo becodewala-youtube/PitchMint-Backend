@@ -1,12 +1,12 @@
 import request from 'supertest';
-import app from '../setup/test-app';
-import { connectTestDB, closeTestDB, clearTestDB } from '../setup/test-db';
-import { createTestUser, createTestIdea, createAuthHeader, mockGeminiResponses } from '../setup/test-helpers';
-import User from '../../src/modules/users/user.model';
-import Idea from '../../src/modules/ideas/idea.model';
-import * as geminiClient from '../../src/shared/integrations/gemini/gemini.client';
+import app from '../../../../../tests/setup/test-app';
+import { connectTestDB, closeTestDB, clearTestDB } from '../../../../../tests/setup/test-db';
+import { createTestUser, createTestIdea, createAuthHeader, mockGeminiResponses } from '../../../../../tests/setup/test-helpers';
+import User from '../../../../../src/modules/users/user.model';
+import Idea from '../../../../../src/modules/ideas/idea.model';
+import * as geminiClient from '../../../../../src/shared/integrations/gemini/gemini.client';
 
-jest.mock('../../src/shared/integrations/gemini/gemini.client', () => ({
+jest.mock('../../../../../src/shared/integrations/gemini/gemini.client', () => ({
   validateIdea: jest.fn(),
   generatePitchDeck: jest.fn(),
   generateCanvas: jest.fn(),

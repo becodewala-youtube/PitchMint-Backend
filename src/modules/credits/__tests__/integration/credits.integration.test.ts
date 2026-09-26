@@ -1,11 +1,11 @@
 import request from 'supertest';
-import { connectTestDB, closeTestDB, clearTestDB } from '../setup/test-db';
-import { createTestUser, createAuthHeader, generatePaymentSignature } from '../setup/test-helpers';
-import User from '../../src/modules/users/user.model';
-import CreditTransaction from '../../src/modules/credits/credit.model';
-import { atomicDeductCredits, refundCredits } from '../../src/shared/middleware/credit.middleware';
-import { CREDIT_PLANS } from '../../src/shared/constants/credit-plans';
-import env from '../../src/config/env';
+import { connectTestDB, closeTestDB, clearTestDB } from '../../../../../tests/setup/test-db';
+import { createTestUser, createAuthHeader, generatePaymentSignature } from '../../../../../tests/setup/test-helpers';
+import User from '../../../../../src/modules/users/user.model';
+import CreditTransaction from '../../../../../src/modules/credits/credit.model';
+import { atomicDeductCredits, refundCredits } from '../../../../../src/shared/middleware/credit.middleware';
+import { CREDIT_PLANS } from '../../../../../src/shared/constants/credit-plans';
+import env from '../../../../../src/config/env';
 
 const mockOrders = {
   create: jest.fn(),
@@ -15,7 +15,7 @@ const mockPayments = {
   fetch: jest.fn()
 };
 
-jest.mock('../../src/shared/integrations/razorpay/razorpay.client', () => ({
+jest.mock('../../../../../src/shared/integrations/razorpay/razorpay.client', () => ({
   __esModule: true,
   default: {
     orders: mockOrders,
@@ -27,7 +27,7 @@ jest.mock('../../src/shared/integrations/razorpay/razorpay.client', () => ({
   }
 }));
 
-import app from '../setup/test-app';
+import app from '../../../../../tests/setup/test-app';
 
 describe('Credits Integration Tests', () => {
   beforeAll(async () => {

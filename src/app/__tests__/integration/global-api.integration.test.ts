@@ -1,6 +1,6 @@
 import request from 'supertest';
-import app from '../setup/test-app';
-import { connectTestDB, closeTestDB, clearTestDB } from '../setup/test-db';
+import app from '../../../../tests/setup/test-app';
+import { connectTestDB, closeTestDB, clearTestDB } from '../../../../tests/setup/test-db';
 
 describe('Global API Behavior and Middleware Integration Tests', () => {
   beforeAll(async () => {

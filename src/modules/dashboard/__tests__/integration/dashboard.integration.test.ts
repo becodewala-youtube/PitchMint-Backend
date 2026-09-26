@@ -1,8 +1,8 @@
 import request from 'supertest';
-import app from '../setup/test-app';
-import { connectTestDB, closeTestDB, clearTestDB } from '../setup/test-db';
-import { createTestUser, createAuthHeader } from '../setup/test-helpers';
-import ActivityHistory from '../../src/modules/dashboard/dashboard.model';
+import app from '../../../../../tests/setup/test-app';
+import { connectTestDB, closeTestDB, clearTestDB } from '../../../../../tests/setup/test-db';
+import { createTestUser, createAuthHeader } from '../../../../../tests/setup/test-helpers';
+import ActivityHistory from '../../../../../src/modules/dashboard/dashboard.model';
 
 describe('Dashboard & Activity History Integration Tests', () => {
   beforeAll(async () => {

@@ -14,7 +14,7 @@
     "lint:fix": "eslint \"src/**/*.ts\" --fix",
     "test": "jest",
     "test:unit": "jest --testPathPatterns=\"src/\"",
-    "test:integration": "jest --testPathPatterns=\"tests/integration/\" --maxWorkers=2"
+    "test:integration": "jest --testPathPatterns=\"integration\" --maxWorkers=2"
   },
   "dependencies": {
     "@google/generative-ai": "^0.2.1",

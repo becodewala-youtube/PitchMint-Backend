@@ -1,13 +1,13 @@
 import request from 'supertest';
-import { connectTestDB, closeTestDB, clearTestDB } from '../setup/test-db';
-import { createTestUser, createAuthHeader } from '../setup/test-helpers';
-import User from '../../src/modules/users/user.model';
-import * as emailService from '../../src/shared/integrations/email/email.service';
-import authService from '../../src/modules/auth/auth.service';
-import cloudinary from '../../src/shared/integrations/cloudinary/cloudinary.client';
+import { connectTestDB, closeTestDB, clearTestDB } from '../../../../../tests/setup/test-db';
+import { createTestUser, createAuthHeader } from '../../../../../tests/setup/test-helpers';
+import User from '../../../../../src/modules/users/user.model';
+import * as emailService from '../../../../../src/shared/integrations/email/email.service';
+import authService from '../../../../../src/modules/auth/auth.service';
+import cloudinary from '../../../../../src/shared/integrations/cloudinary/cloudinary.client';
 
 // Mock external boundaries
-jest.mock('../../src/shared/integrations/email/email.service', () => ({
+jest.mock('../../../../../src/shared/integrations/email/email.service', () => ({
   sendEmailVerification: jest.fn().mockResolvedValue(undefined),
   sendPasswordReset: jest.fn().mockResolvedValue(undefined),
   sendWelcomeEmail: jest.fn().mockResolvedValue(undefined),
@@ -36,7 +36,7 @@ jest.mock('multer-storage-cloudinary', () => ({
 }));
 
 // Import app AFTER mocks are established
-import app from '../setup/test-app';
+import app from '../../../../../tests/setup/test-app';
 
 describe('Auth Integration Tests', () => {
   beforeAll(async () => {
