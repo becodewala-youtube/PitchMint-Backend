@@ -22,6 +22,8 @@ export default tseslint.config(
     files: ['src/**/__tests__/**/*.ts', 'tests/**/*.ts'],
     rules: {
       '@typescript-eslint/no-require-imports': 'off',
+      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-unused-vars': 'off',
     },
   }
 );
