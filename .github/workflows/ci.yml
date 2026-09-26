@@ -17,6 +17,13 @@ concurrency:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    env:
+      JWT_SECRET: "test-jwt-secret-for-ci"
+      MONGODB_URI: "mongodb://localhost:27017/pitchmint-ci-test"
+      RAZORPAY_KEY_ID: "rzp_test_mock_id"
+      RAZORPAY_KEY_SECRET: "rzp_test_mock_secret"
+      RAZORPAY_WEBHOOK_SECRET: "mock_webhook_secret_for_testing"
+      GEMINI_API_KEY: "mock_gemini_api_key_for_testing"
 
     steps:
       - name: Checkout repository
