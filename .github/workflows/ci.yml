@@ -17,6 +17,8 @@ concurrency:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    env:
+      JWT_SECRET: "test-jwt-secret-for-ci"
 
     steps:
       - name: Checkout repository
