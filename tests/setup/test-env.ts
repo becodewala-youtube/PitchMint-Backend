@@ -1,5 +1,9 @@
 process.env.NODE_ENV = 'test';
 process.env.JWT_SECRET = 'test_secret_key_12345';
-process.env.MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/pitchmint_test';
 process.env.RAZORPAY_KEY_ID = 'rzp_test_mock';
 process.env.RAZORPAY_KEY_SECRET = 'rzp_mock_secret';
+process.env.RAZORPAY_WEBHOOK_SECRET = 'rzp_webhook_secret_test_12345';
+process.env.GEMINI_API_KEY = 'test_gemini_api_key';
+process.env.CLOUDINARY_CLOUD_NAME = 'test_cloud';
+process.env.CLOUDINARY_API_KEY = 'test_key';
+process.env.CLOUDINARY_API_SECRET = 'test_secret';

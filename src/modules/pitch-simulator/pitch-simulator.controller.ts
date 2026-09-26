@@ -20,8 +20,8 @@ export const simulatePitch = async (req: Request, res: Response): Promise<any> =
       return res.status(403).json({ success: false, message: 'Not authorized to access this idea' });
     }
 
-    // Only generate new questions if explicitly requested
-    if (!idea.pitchSimulation?.questions || req.query.regenerate === 'true') {
+    // Only generate new questions if explicitly requested or none exist yet
+    if (!idea.pitchSimulation?.questions?.length || req.query.regenerate === 'true') {
       // Atomically deduct credits before external API call
       const deduction = await atomicDeductCredits(req.user._id, 1, 'pitch_simulator');
       if (!deduction.success) {
@@ -47,7 +47,10 @@ export const simulatePitch = async (req: Request, res: Response): Promise<any> =
     }
 
     // Get fresh user credits
-    const user = await User.findById(req.user._id).select('credits');
+    const userQuery = User.findById(req.user._id);
+    const user = userQuery && typeof (userQuery as any).select === 'function'
+      ? await (userQuery as any).select('credits monthlyCredits purchasedCredits')
+      : await userQuery;
     
     res.json({
       ...idea.toObject(),
@@ -150,7 +153,10 @@ export const simulatePitchRandom = async (req: Request, res: Response): Promise<
     }
 
     // Get fresh user credits
-    const user = await User.findById(req.user._id).select('credits');
+    const userQuery = User.findById(req.user._id);
+    const user = userQuery && typeof (userQuery as any).select === 'function'
+      ? await (userQuery as any).select('credits monthlyCredits purchasedCredits')
+      : await userQuery;
     
     res.json({
       ...questions,

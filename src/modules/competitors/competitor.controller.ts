@@ -24,7 +24,7 @@ export const analyzeCompetitors = async (req: Request, res: Response): Promise<a
     }
 
     // If regenerate is false and we have existing analysis, return it
-    if (!regenerate && idea.competitorAnalysis) {
+    if (!regenerate && idea.competitorAnalysis?.summary) {
       return res.json({ competitorAnalysis: idea.competitorAnalysis });
     }
 

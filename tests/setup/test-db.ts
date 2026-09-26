@@ -1,15 +1,27 @@
 import mongoose from 'mongoose';
+import { MongoMemoryServer } from 'mongodb-memory-server';
+
+let mongoServer: MongoMemoryServer | null = null;
 
 export const connectTestDB = async (): Promise<void> => {
-  const uri = process.env.MONGODB_URI || 'mongodb://localhost:27017/pitchmint_test';
   if (mongoose.connection.readyState === 0) {
+    if (!mongoServer) {
+      mongoServer = await MongoMemoryServer.create({
+        instance: { launchTimeout: 60000 }
+      });
+    }
+    const uri = mongoServer.getUri();
     await mongoose.connect(uri);
   }
 };
 
 export const closeTestDB = async (): Promise<void> => {
   if (mongoose.connection.readyState !== 0) {
-    await mongoose.connection.close();
+    await mongoose.disconnect();
+  }
+  if (mongoServer) {
+    await mongoServer.stop();
+    mongoServer = null;
   }
 };
 
