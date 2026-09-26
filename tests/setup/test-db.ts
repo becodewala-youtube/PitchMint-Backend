@@ -16,11 +16,16 @@ export const connectTestDB = async (): Promise<void> => {
 };
 
 export const closeTestDB = async (): Promise<void> => {
-  if (mongoose.connection.readyState !== 0) {
-    await mongoose.disconnect();
-  }
-  if (mongoServer) {
-    await mongoServer.stop();
+  try {
+    if (mongoose.connection.readyState !== 0) {
+      await mongoose.disconnect();
+    }
+    if (mongoServer) {
+      await mongoServer.stop({ force: true });
+      mongoServer = null;
+    }
+  } catch (err) {
+    console.error('Error closing test DB:', err);
     mongoServer = null;
   }
 };
