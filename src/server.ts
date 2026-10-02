@@ -6,7 +6,7 @@ import env from './config/env';
 
 const PORT = env.PORT || 5000;
 
-if (env.NODE_ENV !== 'test') {
+if (env.NODE_ENV !== 'test' || process.env.E2E_TEST === 'true') {
   connectDB()
     .then(() => {
       const server = app.listen(PORT, () => {

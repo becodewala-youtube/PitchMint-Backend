@@ -24,7 +24,8 @@ export const registerUser = async (req: Request, res: Response): Promise<any> =>
       name,
       email,
       password,
-      authProvider: 'local'
+      authProvider: 'local',
+      isEmailVerified: process.env.E2E_TEST === 'true'
     });
 
     // Generate email verification token
@@ -38,7 +39,7 @@ export const registerUser = async (req: Request, res: Response): Promise<any> =>
       logger.error('Failed to send verification email:', emailError);
     }
 
-    res.status(201).json({ success: false, message: 'User registered successfully. Please check your email for verification code.',
+    res.status(201).json({ success: true, message: 'User registered successfully. Please check your email for verification code.',
       userId: user._id,
       emailSent: true
     });

@@ -14,6 +14,11 @@ const transporter = nodemailer.createTransport({
 
 // Send email verification
 export const sendEmailVerification = async (email: string, name: string, token: string): Promise<void> => {
+  if (process.env.E2E_TEST === 'true') {
+    console.log(`[E2E_TEST MOCK] Would send verification email to ${email} with token ${token}`);
+    return;
+  }
+  
   const mailOptions = {
     from: env.EMAIL_FROM,
     to: email,
@@ -52,6 +57,10 @@ export const sendEmailVerification = async (email: string, name: string, token: 
 
 // Send password reset email
 export const sendPasswordReset = async (email: string, name: string, token: string): Promise<void> => {
+  if (process.env.E2E_TEST === 'true') {
+    console.log(`[E2E_TEST MOCK] Would send password reset email to ${email} with token ${token}`);
+    return;
+  }
   const mailOptions = {
     from: env.EMAIL_FROM,
     to: email,
@@ -90,6 +99,10 @@ export const sendPasswordReset = async (email: string, name: string, token: stri
 
 // Send welcome email
 export const sendWelcomeEmail = async (email: string, name: string): Promise<void> => {
+  if (process.env.E2E_TEST === 'true') {
+    console.log(`[E2E_TEST MOCK] Would send welcome email to ${email}`);
+    return;
+  }
   const mailOptions = {
     from: env.EMAIL_FROM,
     to: email,
