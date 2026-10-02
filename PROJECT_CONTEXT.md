@@ -34,3 +34,6 @@ PitchMint-Backend serves the PitchMint-frontend repository. It defines the REST 
 ```
 Frontend -> API Contract -> Backend -> Database / External Services
 ```
+
+## 11. E2E Testing
+E2E testing is owned by the PitchMint-frontend repository using Playwright. The backend pipeline checks out the frontend E2E suite to run integrated E2E tests before CD.

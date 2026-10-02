@@ -5,7 +5,7 @@
   "main": "dist/server.js",
   "type": "commonjs",
   "scripts": {
-    "build": "tsc",
+    "build": "node -e \"console.log('🚀 Starting backend build...'); console.log('📦 Compiling TypeScript files with tsc...');\" && tsc && node -e \"console.log('✅ Build completed successfully! Check the dist/ directory.');\"",
     "start": "node dist/server.js",
     "dev": "tsx watch src/server.ts",
     "type-check": "tsc --noEmit && tsc -p tsconfig.test.json --noEmit",
@@ -15,6 +15,7 @@
     "test": "jest --runInBand",
     "test:unit": "jest --testPathPatterns=\"src/\" --runInBand",
     "test:integration": "jest --testPathPatterns=\"integration\" --runInBand",
+    "test:coverage": "jest --coverage --runInBand",
     "prepare": "husky"
   },
   "dependencies": {
