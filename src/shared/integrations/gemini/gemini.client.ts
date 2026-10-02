@@ -56,7 +56,7 @@ export interface IdeaValidationResult {
 
 // Function to validate an idea
 export const validateIdea = async (ideaText: string): Promise<IdeaValidationResult> => {
-  if (env.NODE_ENV === 'test' || env.GEMINI_API_KEY === 'mock_gemini_key' || env.GEMINI_API_KEY === 'mock_gemini_api_key_for_testing') {
+  if (process.env.E2E_TEST === 'true') {
     return {
       marketDemandScore: 85,
       competitionScore: 70,

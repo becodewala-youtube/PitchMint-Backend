@@ -20,13 +20,16 @@ export const registerUser = async (req: Request, res: Response): Promise<any> =>
     }
 
     // Create user
-    const user = await User.create({
+    const userPayload: any = {
       name,
       email,
       password,
-      authProvider: 'local',
-      isEmailVerified: process.env.E2E_TEST === 'true'
-    });
+      authProvider: 'local'
+    };
+    if (process.env.E2E_TEST === 'true') {
+      userPayload.isEmailVerified = true;
+    }
+    const user = await User.create(userPayload);
 
     // Generate email verification token
     const verificationToken = user.generateEmailVerificationToken();
