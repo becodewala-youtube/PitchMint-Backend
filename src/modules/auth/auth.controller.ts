@@ -277,7 +277,7 @@ export const forgotPassword = async (req: Request, res: Response): Promise<any> 
     const successMessage = 'If an account exists for that email address, password reset instructions have been sent.';
 
     if (!user) {
-      logger.info(`Forgot password requested for non-existent email: ${email}`);
+      logger.info('Password reset requested for unknown account');
       return res.json({ message: successMessage });
     }
 
