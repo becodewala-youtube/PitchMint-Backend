@@ -3,9 +3,11 @@ import cors from 'cors';
 import morgan from 'morgan';
 import helmet from 'helmet';
 import env from '../config/env';
+import logger from '../config/logger';
 import { apiLimiter, authLimiter } from '../shared/middleware/rate-limiter.middleware';
 import { sanitizeInput } from '../shared/middleware/sanitizer.middleware';
 import { errorHandler, notFoundHandler } from '../shared/errors/error.middleware';
+import { requestIdMiddleware } from '../shared/middleware/request-id.middleware';
 import routes from './routes';
 
 const app = express();
@@ -35,6 +37,9 @@ app.use(cors({
 // Security headers
 app.use(helmet());
 
+// Request ID early in the middleware chain
+app.use(requestIdMiddleware);
+
 // General middleware (after raw and CORS)
 app.use(express.json());
 app.use(sanitizeInput);
@@ -43,9 +48,25 @@ app.use(sanitizeInput);
 app.use('/api/auth', authLimiter);
 app.use('/api', apiLimiter);
 
-// Request logger in development mode
+// Access logging
 if (env.NODE_ENV === 'development') {
   app.use(morgan('dev'));
+} else {
+  // Production structured access logs
+  app.use(morgan((tokens, req, res) => {
+    return JSON.stringify({
+      requestId: (req as any).requestId,
+      method: tokens.method(req, res),
+      url: tokens.url(req, res),
+      status: tokens.status(req, res),
+      content_length: tokens.res(req, res, 'content-length'),
+      response_time_ms: tokens['response-time'](req, res)
+    });
+  }, {
+    stream: {
+      write: (message) => logger.info(message.trim())
+    }
+  }));
 }
 
 // Health check endpoint
