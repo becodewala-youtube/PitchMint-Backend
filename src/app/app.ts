@@ -3,7 +3,8 @@ import cors from 'cors';
 import morgan from 'morgan';
 import helmet from 'helmet';
 import env from '../config/env';
-import logger from '../config/logger';
+import logger, { redact } from '../config/logger';
+import * as Sentry from '@sentry/node';
 import { apiLimiter, authLimiter } from '../shared/middleware/rate-limiter.middleware';
 import { sanitizeInput } from '../shared/middleware/sanitizer.middleware';
 import { errorHandler, notFoundHandler } from '../shared/errors/error.middleware';
@@ -11,6 +12,14 @@ import { requestIdMiddleware } from '../shared/middleware/request-id.middleware'
 import routes from './routes';
 
 const app = express();
+
+Sentry.init({
+  dsn: env.SENTRY_DSN,
+  environment: env.NODE_ENV,
+  beforeSend(event) {
+    return redact(event);
+  }
+});
 
 // Webhook raw body parser (must come before express.json)
 app.use('/api/payment/webhook', express.raw({ type: 'application/json' }));

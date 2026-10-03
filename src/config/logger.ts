@@ -50,9 +50,52 @@ const injectRequestIdAndRedact = winston.format((info) => {
     info.requestId = reqId;
   }
   
+  // Catch AxiosError spread directly into info
+  const infoObj = info as any;
+  if (infoObj.isAxiosError || (infoObj.config && infoObj.response)) {
+    infoObj.apiStatus = infoObj.response?.status;
+    infoObj.apiMethod = infoObj.config?.method;
+    infoObj.apiUrl = infoObj.config?.url;
+    delete infoObj.config;
+    delete infoObj.request;
+    delete infoObj.response;
+  }
+
   for (const key of Object.keys(info)) {
     if (key !== 'message' && key !== 'level' && key !== 'timestamp' && key !== 'requestId') {
-      info[key] = redact(info[key]);
+      let value = info[key];
+      
+      // 1. Explicit allowlist extraction for known dangerous object types
+      if (value && typeof value === 'object') {
+        const val = value as any;
+        if (val.isAxiosError || (val.config && val.response)) {
+          value = {
+            message: val.message,
+            name: val.name,
+            code: val.code,
+            status: val.response?.status,
+            method: val.config?.method,
+            url: val.config?.url,
+          };
+        } else if (val.headers && val.method && val.url && typeof val.header === 'function') {
+          // Express Request object
+          value = {
+            method: val.method,
+            url: val.url,
+            query: val.query,
+          };
+        } else if (value instanceof Error) {
+          // Standard Error (prevents arbitrary SDK payload leakage)
+          value = {
+            message: val.message,
+            name: val.name,
+            stack: env.NODE_ENV === 'development' ? val.stack : undefined,
+          };
+        }
+      }
+      
+      // 2. Centralized redaction as defense-in-depth
+      info[key] = redact(value);
     }
   }
   return info;
