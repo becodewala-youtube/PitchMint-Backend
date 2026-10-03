@@ -304,7 +304,7 @@ describe('Auth Integration Tests', () => {
         .send({ email: user.email });
 
       expect(forgotRes.status).toBe(200);
-      expect(forgotRes.body.message).toContain('Password reset code sent');
+      expect(forgotRes.body.message).toContain('If an account exists for that email address, password reset instructions have been sent');
       expect(emailService.sendPasswordReset).toHaveBeenCalled();
 
       // Retrieve reset token from DB
