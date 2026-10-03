@@ -56,6 +56,21 @@ export interface IdeaValidationResult {
 
 // Function to validate an idea
 export const validateIdea = async (ideaText: string): Promise<IdeaValidationResult> => {
+  if (process.env.E2E_TEST === 'true') {
+    return {
+      marketDemandScore: 85,
+      competitionScore: 70,
+      monetizationFeasibilityScore: 75,
+      overallScore: 77,
+      analysis: {
+        marketDemand: { score: 85, text: "Mock market demand analysis." },
+        competition: { score: 70, text: "Mock competition analysis." },
+        monetization: { score: 75, text: "Mock monetization analysis." },
+        overall: { score: 77, text: "Mock overall analysis." }
+      }
+    };
+  }
+
   try {
     const systemPrompt = `
 You are an expert startup advisor and venture capitalist. Analyze the following startup idea comprehensively.

@@ -20,12 +20,16 @@ export const registerUser = async (req: Request, res: Response): Promise<any> =>
     }
 
     // Create user
-    const user = await User.create({
+    const userPayload: any = {
       name,
       email,
       password,
       authProvider: 'local'
-    });
+    };
+    if (process.env.E2E_TEST === 'true') {
+      userPayload.isEmailVerified = true;
+    }
+    const user = await User.create(userPayload);
 
     // Generate email verification token
     const verificationToken = user.generateEmailVerificationToken();
@@ -38,7 +42,7 @@ export const registerUser = async (req: Request, res: Response): Promise<any> =>
       logger.error('Failed to send verification email:', emailError);
     }
 
-    res.status(201).json({ success: false, message: 'User registered successfully. Please check your email for verification code.',
+    res.status(201).json({ success: true, message: 'User registered successfully. Please check your email for verification code.',
       userId: user._id,
       emailSent: true
     });
