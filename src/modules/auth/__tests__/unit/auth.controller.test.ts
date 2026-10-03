@@ -434,19 +434,20 @@ describe('Auth Controller Unit Tests', () => {
   });
 
   describe('forgotPassword', () => {
-    test('should return 404 if user not found', async () => {
+    const genericSuccessMessage = 'If an account exists for that email address, password reset instructions have been sent.';
+
+    test('should return 200 and generic message if user not found (prevent enumeration)', async () => {
       req.body = { email: 'unknown@example.com' };
       (User.findOne as jest.Mock).mockResolvedValue(null);
 
       await forgotPassword(req as Request, res as Response);
 
-      expect(statusMock).toHaveBeenCalledWith(404);
       expect(jsonMock).toHaveBeenCalledWith(expect.objectContaining({
-        message: 'User not found'
+        message: genericSuccessMessage
       }));
     });
 
-    test('should return 500 if sending reset email fails', async () => {
+    test('should return 200 and generic message if sending reset email fails (prevent enumeration)', async () => {
       req.body = { email: 'john@example.com' };
       const mockUser = {
         name: 'John',
@@ -458,13 +459,12 @@ describe('Auth Controller Unit Tests', () => {
 
       await forgotPassword(req as Request, res as Response);
 
-      expect(statusMock).toHaveBeenCalledWith(500);
       expect(jsonMock).toHaveBeenCalledWith(expect.objectContaining({
-        message: 'Failed to send password reset email. Please try again later.'
+        message: genericSuccessMessage
       }));
     });
 
-    test('should successfully send password reset code', async () => {
+    test('should successfully send password reset code and return generic message', async () => {
       req.body = { email: 'john@example.com' };
       const mockUser = {
         name: 'John',
@@ -478,7 +478,7 @@ describe('Auth Controller Unit Tests', () => {
 
       expect(emailService.sendPasswordReset).toHaveBeenCalledWith('john@example.com', 'John', 'reset-hex-token');
       expect(jsonMock).toHaveBeenCalledWith(expect.objectContaining({
-        message: 'Password reset code sent to your email'
+        message: genericSuccessMessage
       }));
     });
   });

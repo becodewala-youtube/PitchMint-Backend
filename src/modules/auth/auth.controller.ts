@@ -274,9 +274,11 @@ export const forgotPassword = async (req: Request, res: Response): Promise<any> 
     const { email } = req.body;
 
     const user = await User.findOne({ email });
+    const successMessage = 'If an account exists for that email address, password reset instructions have been sent.';
 
     if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
+      logger.info(`Forgot password requested for non-existent email: ${email}`);
+      return res.json({ message: successMessage });
     }
 
     const resetToken = user.generatePasswordResetToken();
@@ -286,13 +288,14 @@ export const forgotPassword = async (req: Request, res: Response): Promise<any> 
       await sendPasswordReset(email, user.name, resetToken);
     } catch (emailError) {
       logger.error('Failed to send password reset email:', emailError);
-      return res.status(500).json({ success: false, message: 'Failed to send password reset email. Please try again later.' });
+      // ENUMERATION FIX: Do not leak existence on email failure.
+      return res.json({ message: successMessage });
     }
 
-    res.json({ message: 'Password reset code sent to your email' });
+    res.json({ message: successMessage });
   } catch (error: any) {
     logger.error('Forgot password error:', error);
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({ success: false, message: 'An unexpected error occurred. Please try again later.' });
   }
 };
 
