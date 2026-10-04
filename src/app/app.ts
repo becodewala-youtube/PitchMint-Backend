@@ -13,13 +13,15 @@ import routes from './routes';
 
 const app = express();
 
-Sentry.init({
-  dsn: env.SENTRY_DSN,
-  environment: env.NODE_ENV,
-  beforeSend(event) {
-    return redact(event);
-  }
-});
+if (env.NODE_ENV !== 'test') {
+  Sentry.init({
+    dsn: env.SENTRY_DSN,
+    environment: env.NODE_ENV,
+    beforeSend(event) {
+      return redact(event);
+    }
+  });
+}
 
 // Webhook raw body parser (must come before express.json)
 app.use('/api/payment/webhook', express.raw({ type: 'application/json' }));
