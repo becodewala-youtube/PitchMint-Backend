@@ -1,0 +1,39 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: "en-US"
+reviews:
+  profile: "chill"
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: false
+  auto_review:
+    enabled: true
+    drafts: false
+  path_filters:
+    - "!node_modules/**"
+    - "!dist/**"
+    - "!coverage/**"
+    - "!docs/**"
+    - "!package-lock.json"
+    - "!graphify-out/**"
+  path_instructions:
+    - path: "src/modules/**/*.ts"
+      instructions: |
+        SECURITY & CORRECTNESS: Focus on authentication/authorization bypass risks, input validation (NoSQL/Mongoose injection), and race conditions.
+        ARCHITECTURE: Modules must depend on src/shared/, not on each other. Controllers handle HTTP and delegate to services. Services handle business logic. Do not bypass services for DB interaction.
+    - path: "src/shared/middleware/credit.middleware.ts"
+      instructions: |
+        CREDIT SYSTEM INTEGRITY: Deductions MUST use atomicDeductCredits(). Refunds MUST use refundCredits(). Ensure MongoDB aggregation pipelines for atomic cascading deductions remain intact. Ensure compensation logic for failures is not bypassed.
+    - path: "src/modules/credits/credit.service.ts"
+      instructions: |
+        PAYMENT INTEGRITY: Payment processing must use processSuccessfulPayment(). Ensure idempotency using processedPayments array and Razorpay unique sparse index is preserved. Ensure P3 ledger desynchronization recovery is intact.
+    - path: "src/app/app.ts"
+      instructions: |
+        CRITICAL CONSTRAINT: Middleware order must remain: Raw body -> CORS -> helmet -> JSON -> sanitizer -> rate limiters -> routes -> error handler.
+        Webhook raw body (/api/payment/webhook) must use express.raw() BEFORE express.json() for Razorpay signature verification.
+    - path: "**/*.ts"
+      instructions: |
+        GENERAL: Focus on high-value semantic findings (business logic errors, async/await issues, edge cases). 
+        NOISE REDUCTION: Do NOT comment on formatting, indentation, subjective styling, trivial naming, or speculative micro-optimizations. TypeScript and ESLint will catch basic errors.
+chat:
+  auto_reply: true
