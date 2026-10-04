@@ -1,9 +1,28 @@
 import { Request, Response, NextFunction } from 'express';
+import * as Sentry from '@sentry/node';
 import logger from '../../config/logger';
 import env from '../../config/env';
 
-export const errorHandler = (err: any, req: Request, res: Response, next: NextFunction): void => {
+export const errorHandler = (err: any, req: Request, res: Response, _next: NextFunction): void => {
   const requestId = (req as any).requestId;
+  
+  Sentry.withScope((scope) => {
+    if (requestId) scope.setTag('requestId', requestId);
+    
+    if ((req as any).user) {
+      const user = (req as any).user;
+      scope.setUser({ id: user._id?.toString(), email: user.email });
+    }
+    
+    scope.setContext('request', {
+      method: req.method,
+      url: req.originalUrl || req.url,
+      query: req.query
+    });
+
+    Sentry.captureException(err);
+  });
+
   logger.error('Global error handler:', err);
 
   const statusCode = err.statusCode || 500;
