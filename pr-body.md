@@ -1,15 +1,19 @@
 ### What Changed
-- Replaced 404 responses with a generic 200 success message in `forgotPassword`.
-- Ensured token generation and email dispatch only occur internally for valid users.
-- Redacted the submitted email address from the unknown account log to prevent storing PII.
-- Updated unit tests to assert the generic response.
+- Added `.commitlintrc.json` and `.husky/commit-msg` to enforce Conventional Commits.
+- Modified `.husky/pre-commit` to strictly run `lint-staged`.
+- Deleted `.husky/pre-push` to defer heavy validation to GitHub Actions.
+- Installed `@commitlint/cli` and `@commitlint/config-conventional` dependencies.
+- Standardized concise `.github/pull_request_template.md`.
 
 ### Why It Changed
-- The forgot-password endpoint previously leaked whether an email address was registered by returning 404, allowing account enumeration.
+- Optimize the local developer feedback loop by eliminating redundant pre-push testing (tests are correctly gated on GitHub Actions instead).
+- Make git workflow conventions mechanically enforceable to improve consistency.
 
 ### Testing Performed
-- `npm run test -- auth.controller.test.ts` - 34/34 tests passed.
-- `npm run type-check` - passed.
+- `npm run type-check` - 0 errors.
+- `npm run test -- --runInBand` - 457/457 passed locally.
+- Manually verified `commit-msg` hook correctly allows standard commits and rejects unformatted ones.
 
 ### Limitations
-- Users mistyping their email will not receive immediate feedback that the email was wrong.
+- Branch names are intentionally not mechanically enforced locally as per requirements, relying on developer discipline.
+- GitHub branch protection requires manual verification in the repository settings.
