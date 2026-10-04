@@ -1,29 +1,24 @@
-## Summary
+# What Changed
 
-## Changes
+<!-- Describe the implementation/change -->
 
-## Why
+# Why
 
-## Testing
+<!-- Explain the reason/business/technical motivation -->
 
-## Coverage
+# Testing Performed
 
-## Security considerations
+- [ ] Unit tests
+- [ ] Integration tests (if applicable)
+- [ ] E2E tests (if applicable)
+- [ ] Type-check
+- [ ] Build
 
-## Breaking changes
+# Checklist
 
-## Files removed
-
-## Files added
-
-## Verification checklist
-
-- [ ] Type-check passes
 - [ ] Lint passes
 - [ ] Tests pass
-- [ ] Coverage reviewed
-- [ ] Build passes
-- [ ] npm audit checked
-- [ ] No secrets committed
-- [ ] No unnecessary files committed
-- [ ] Git diff reviewed
+- [ ] No secrets or credentials committed
+- [ ] No unnecessary dependencies added
+- [ ] Documentation updated if needed
+- [ ] Breaking changes documented if applicable
