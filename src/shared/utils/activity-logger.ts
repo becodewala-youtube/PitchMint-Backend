@@ -2,6 +2,9 @@ import { Types } from 'mongoose';
 import { dashboardService } from '../../modules/dashboard/dashboard.service';
 import { ServiceType } from '../../modules/dashboard/dashboard.types';
 
+/**
+ * Helper utility to log activity to the user's dashboard.
+ */
 export const logActivity = async (
   userId: Types.ObjectId | string,
   serviceType: ServiceType,
