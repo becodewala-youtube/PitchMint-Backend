@@ -16,6 +16,12 @@
     "test:unit": "jest --testPathPatterns=\"src/\" --runInBand",
     "test:integration": "jest --testPathPatterns=\"integration\" --runInBand",
     "test:coverage": "jest --coverage --runInBand",
+    "check:circular": "madge --extensions ts --ts-config tsconfig.json --circular src",
+    "check:orphans": "madge --extensions ts --ts-config tsconfig.json --orphans src",
+    "check:leaves": "madge --extensions ts --ts-config tsconfig.json --leaves src",
+    "check:summary": "madge --extensions ts --ts-config tsconfig.json --summary src",
+    "check:graph": "madge --extensions ts --ts-config tsconfig.json --dot src > dependency-graph.dot",
+    "check:unused": "knip",
     "prepare": "husky"
   },
   "dependencies": {
@@ -60,6 +66,7 @@
     "jest": "^30.5.2",
     "knip": "^6.37.0",
     "lint-staged": "^17.6.0",
+    "madge": "^8.0.0",
     "mongodb-memory-server": "^11.2.0",
     "supertest": "^7.2.2",
     "ts-jest": "^29.4.12",
