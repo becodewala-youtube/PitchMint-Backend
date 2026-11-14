@@ -20,7 +20,16 @@
 
 ### Idempotency & Credit Safety (`API-02`)
 - **Header:** `Idempotency-Key` (or `x-idempotency-key`)
-- **TTL:** 24 hours (`expires: 86400` TTL index)
+- **TTL & Retention Policy:**
+  - The 24-hour retention period applies strictly to terminal records (`completed` and `failed`) via an `expiresAt` TTL index (`expireAfterSeconds: 0`).
+  - Active operations (`in_progress`) have no `expiresAt` timestamp and **never automatically expire**, ensuring in-flight mutual exclusion and crash protection are maintained.
+  - When a `failed` record is claimed for a retry, its `expiresAt` is removed (`$unset`) so it remains protected while the retry executes.
+  - When that retry completes or genuinely fails, a fresh 24-hour expiration window begins from that terminal timestamp.
+- **Crash Recovery & Client Key Invariant:**
+  - If an ungraceful server crash or process termination occurs mid-flight, the record safely remains `in_progress` in MongoDB.
+  - **A client must NEVER create a new idempotency key just to bypass an ambiguous or in-progress previous operation.** Reissuing a request with a new key could trigger duplicate credit burns and side effects if the original operation already succeeded or partially completed.
+  - While a record remains `in_progress`, duplicate requests with that key will return HTTP 409 Conflict without re-executing the handler.
+  - Resolving an `in_progress` operation stuck due to an ungraceful host process crash may require administrative inspection and safe manual intervention.
 - **Supported Operations:**
   - `POST /api/idea/submit`
   - `POST /api/pitchdeck/:id` and `PUT /api/pitchdeck/:id`
@@ -28,11 +37,11 @@
   - `POST /api/competitors/analyze/:id`
   - `POST /api/pitch-simulator/simulate/:id`
 - **Behavior:**
-  - On new key: atomically records `in_progress` status in MongoDB and proceeds with credit deduction and AI execution.
+  - On new key: atomically records `in_progress` status (without expiry) in MongoDB and proceeds with credit deduction and AI execution.
   - On duplicate key:
     - If `completed`: returns cached HTTP status code and response payload immediately (0 credits deducted).
-    - If `in_progress`: returns HTTP 409 Conflict.
-    - If `failed`: allows clean retry by atomically transitioning record back to `in_progress`.
+    - If `in_progress`: returns HTTP 409 Conflict ("Request currently in progress. Please retry shortly.").
+    - If `failed`: allows clean retry by atomically transitioning record back to `in_progress` (and unsetting `expiresAt`) ONLY if request identity matches. Rejects identity mismatches with HTTP 409 Conflict without modifying the record.
 
 ### Ideas (`/api/idea`)
 - `POST /submit`: Submit and validate idea with Gemini AI (1 credit, supports `Idempotency-Key`)

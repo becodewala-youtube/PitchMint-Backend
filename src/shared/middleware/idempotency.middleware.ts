@@ -4,6 +4,25 @@ import IdempotencyRecord, { IIdempotencyRecord } from '../../modules/idempotency
 import logger from '../../config/logger';
 
 /**
+ * Recursively canonicalizes an object by sorting all object keys so that
+ * equivalent JSON payloads always hash to the exact same SHA-256 fingerprint.
+ */
+export const canonicalize = (obj: any): any => {
+  if (obj === null || typeof obj !== 'object') {
+    return obj;
+  }
+  if (Array.isArray(obj)) {
+    return obj.map(canonicalize);
+  }
+  const sortedKeys = Object.keys(obj).sort();
+  const result: Record<string, any> = {};
+  for (const key of sortedKeys) {
+    result[key] = canonicalize(obj[key]);
+  }
+  return result;
+};
+
+/**
  * Middleware providing durable MongoDB-backed API idempotency for credit-consuming routes.
  * Uses Idempotency-Key (or x-idempotency-key) header.
  */
@@ -27,11 +46,14 @@ export const idempotencyMiddleware = async (
   }
 
   const userId = req.user._id;
-  const endpoint = req.originalUrl || req.baseUrl + req.path || req.url;
+  const httpMethod = (req.method || 'POST').toUpperCase();
+  const rawPath = req.originalUrl ? req.originalUrl.split('?')[0] : (req.baseUrl + req.path);
+  const endpoint = (rawPath || '').replace(/\/+$/, '') || '/';
 
+  const canonicalPayload = canonicalize(req.body || {});
   const requestPayloadHash = crypto
     .createHash('sha256')
-    .update(JSON.stringify(req.body || {}))
+    .update(JSON.stringify(canonicalPayload))
     .digest('hex');
 
   let record: IIdempotencyRecord;
@@ -40,6 +62,7 @@ export const idempotencyMiddleware = async (
     record = await IdempotencyRecord.create({
       userId,
       idempotencyKey,
+      httpMethod,
       endpoint,
       status: 'in_progress',
       requestPayloadHash,
@@ -47,13 +70,26 @@ export const idempotencyMiddleware = async (
     });
   } catch (error: any) {
     if (error && (error.code === 11000 || (error.name === 'MongoServerError' && error.code === 11000))) {
-      // Duplicate key: handle based on existing record status
+      // Duplicate key: fetch existing record
       const existing = await IdempotencyRecord.findOne({ userId, idempotencyKey });
 
       if (!existing) {
         return res.status(409).json({
           success: false,
           message: 'Request currently in progress. Please retry shortly.'
+        });
+      }
+
+      // Request Identity Validation: compare httpMethod, endpoint, and requestPayloadHash
+      const identityMatches =
+        existing.httpMethod === httpMethod &&
+        existing.endpoint === endpoint &&
+        existing.requestPayloadHash === requestPayloadHash;
+
+      if (!identityMatches) {
+        return res.status(409).json({
+          success: false,
+          message: 'Idempotency key has already been used with a different request payload or endpoint.'
         });
       }
 
@@ -71,15 +107,18 @@ export const idempotencyMiddleware = async (
       }
 
       if (existing.status === 'failed') {
-        // Previous attempt failed: atomically claim retry
+        // Previous attempt failed: atomically claim retry ONLY if request identity matches.
+        // Do NOT overwrite endpoint, method, or payload hash during failed-request retry.
+        // Unset expiresAt so the record has no automatic expiry while retry is in_progress.
         const retryClaim = await IdempotencyRecord.findOneAndUpdate(
           { _id: existing._id, status: 'failed' },
           {
             $set: {
               status: 'in_progress',
-              endpoint,
-              requestPayloadHash,
               createdAt: new Date()
+            },
+            $unset: {
+              expiresAt: 1
             }
           },
           { new: true }
@@ -124,11 +163,14 @@ export const idempotencyMiddleware = async (
       cleanData = body;
     }
 
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
     await IdempotencyRecord.findByIdAndUpdate(record._id, {
       $set: {
         status: isSuccess ? 'completed' : 'failed',
         responseStatus: statusCode,
-        responseData: cleanData
+        responseData: cleanData,
+        expiresAt
       }
     });
   };
@@ -142,7 +184,13 @@ export const idempotencyMiddleware = async (
         logger.error('Error recording idempotency response in res.json', err);
       })
       .finally(() => {
-        originalJson(body);
+        try {
+          if (!res.writableEnded && !res.destroyed) {
+            originalJson(body);
+          }
+        } catch (e) {
+          logger.debug('Socket closed before writing res.json response', e);
+        }
       });
     return res;
   };
@@ -156,23 +204,22 @@ export const idempotencyMiddleware = async (
         logger.error('Error recording idempotency response in res.send', err);
       })
       .finally(() => {
-        originalSend(body);
+        try {
+          if (!res.writableEnded && !res.destroyed) {
+            originalSend(body);
+          }
+        } catch (e) {
+          logger.debug('Socket closed before writing res.send response', e);
+        }
       });
     return res;
   };
 
   res.on('close', () => {
     if (!res.writableEnded && !captured) {
-      captured = true;
-      IdempotencyRecord.findByIdAndUpdate(record._id, {
-        $set: {
-          status: 'failed',
-          responseStatus: 499,
-          responseData: { message: 'Client connection closed before response completed' }
-        }
-      }).catch((err) => {
-        logger.error('Error marking idempotency record failed on socket close', err);
-      });
+      logger.info(
+        `Client disconnected while idempotency key ${idempotencyKey} is in progress; retaining in_progress protection`
+      );
     }
   });
 
