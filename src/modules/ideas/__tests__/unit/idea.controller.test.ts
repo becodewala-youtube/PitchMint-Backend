@@ -218,13 +218,142 @@ describe('Idea Controller Unit Tests', () => {
         total: 2
       });
     });
+
+    test('should safely escape search regex and filter by trimmed search text', async () => {
+      (req as any).user = { _id: 'user-123' };
+      req.query = { search: '  AI [v2.0] + test?  ' };
+
+      const sortMock = jest.fn().mockReturnValue({
+        limit: jest.fn().mockReturnValue({
+          skip: jest.fn().mockResolvedValue([])
+        })
+      });
+      (Idea.find as jest.Mock).mockReturnValue({ sort: sortMock });
+      (Idea.countDocuments as jest.Mock).mockResolvedValue(0);
+
+      await getSavedIdeas(req as Request, res as Response);
+
+      expect(Idea.find).toHaveBeenCalledWith(expect.objectContaining({
+        ideaText: {
+          $regex: 'AI \\[v2\\.0\\] \\+ test\\?',
+          $options: 'i'
+        }
+      }));
+      expect(jsonMock).toHaveBeenCalledWith(expect.objectContaining({
+        totalPages: 0,
+        total: 0
+      }));
+    });
+
+    test('should apply filter "top" (overallScore >= 80)', async () => {
+      (req as any).user = { _id: 'user-123' };
+      req.query = { filter: 'top' };
+
+      const sortMock = jest.fn().mockReturnValue({
+        limit: jest.fn().mockReturnValue({
+          skip: jest.fn().mockResolvedValue([])
+        })
+      });
+      (Idea.find as jest.Mock).mockReturnValue({ sort: sortMock });
+      (Idea.countDocuments as jest.Mock).mockResolvedValue(0);
+
+      await getSavedIdeas(req as Request, res as Response);
+
+      expect(Idea.find).toHaveBeenCalledWith(expect.objectContaining({
+        overallScore: { $gte: 80 }
+      }));
+    });
+
+    test('should apply filter "deck" (pitchDeckContent.problem exists and ne empty)', async () => {
+      (req as any).user = { _id: 'user-123' };
+      req.query = { filter: 'deck' };
+
+      const sortMock = jest.fn().mockReturnValue({
+        limit: jest.fn().mockReturnValue({
+          skip: jest.fn().mockResolvedValue([])
+        })
+      });
+      (Idea.find as jest.Mock).mockReturnValue({ sort: sortMock });
+      (Idea.countDocuments as jest.Mock).mockResolvedValue(0);
+
+      await getSavedIdeas(req as Request, res as Response);
+
+      expect(Idea.find).toHaveBeenCalledWith(expect.objectContaining({
+        'pitchDeckContent.problem': { $exists: true, $nin: ['', null] }
+      }));
+    });
+
+    test('should apply filter "none" (unexpanded ideas)', async () => {
+      (req as any).user = { _id: 'user-123' };
+      req.query = { filter: 'none' };
+
+      const sortMock = jest.fn().mockReturnValue({
+        limit: jest.fn().mockReturnValue({
+          skip: jest.fn().mockResolvedValue([])
+        })
+      });
+      (Idea.find as jest.Mock).mockReturnValue({ sort: sortMock });
+      (Idea.countDocuments as jest.Mock).mockResolvedValue(0);
+
+      await getSavedIdeas(req as Request, res as Response);
+
+      expect(Idea.find).toHaveBeenCalledWith(expect.objectContaining({
+        $and: expect.any(Array)
+      }));
+    });
+
+    test('should clamp limit to max 50 and sort by overallScore asc when specified', async () => {
+      (req as any).user = { _id: 'user-123' };
+      req.query = { limit: '100', sortBy: 'overallScore', sortOrder: 'asc' };
+
+      const limitMock = jest.fn().mockReturnValue({
+        skip: jest.fn().mockResolvedValue([])
+      });
+      const sortMock = jest.fn().mockReturnValue({
+        limit: limitMock
+      });
+      (Idea.find as jest.Mock).mockReturnValue({ sort: sortMock });
+      (Idea.countDocuments as jest.Mock).mockResolvedValue(0);
+
+      await getSavedIdeas(req as Request, res as Response);
+
+      expect(sortMock).toHaveBeenCalledWith({ overallScore: 1 });
+      expect(limitMock).toHaveBeenCalledWith(50);
+    });
   });
 
   describe('deleteIdea', () => {
+    test('should return 401 if user is not authenticated', async () => {
+      req.params = { id: 'idea-123' };
+      req.user = undefined;
+
+      await deleteIdea(req as Request, res as Response);
+
+      expect(statusMock).toHaveBeenCalledWith(401);
+      expect(jsonMock).toHaveBeenCalledWith(expect.objectContaining({
+        message: 'Not authorized'
+      }));
+    });
+
     test('should return 404 if idea to delete does not exist', async () => {
       req.params = { id: 'idea-missing' };
       (req as any).user = { _id: 'user-123' };
       (Idea.findById as jest.Mock).mockResolvedValue(null);
+
+      await deleteIdea(req as Request, res as Response);
+
+      expect(statusMock).toHaveBeenCalledWith(404);
+      expect(jsonMock).toHaveBeenCalledWith(expect.objectContaining({
+        message: 'Idea not found'
+      }));
+    });
+
+    test('should return 404 if id causes a CastError', async () => {
+      req.params = { id: 'invalid-id' };
+      (req as any).user = { _id: 'user-123' };
+      const castError: any = new Error('Cast to ObjectId failed');
+      castError.name = 'CastError';
+      (Idea.findById as jest.Mock).mockRejectedValue(castError);
 
       await deleteIdea(req as Request, res as Response);
 

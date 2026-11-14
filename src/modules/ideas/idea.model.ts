@@ -125,6 +125,10 @@ const ideaSchema = new Schema<IIdea>({
   }
 });
 
+// Compound indexes for user idea querying, sorting and filtering
+ideaSchema.index({ userId: 1, createdAt: -1 });
+ideaSchema.index({ userId: 1, overallScore: -1 });
+
 // Calculate overall score before saving
 ideaSchema.pre('save', function(next) {
   if (this.marketDemandScore && this.competitionScore && this.monetizationFeasibilityScore) {

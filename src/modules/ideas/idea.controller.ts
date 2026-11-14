@@ -120,22 +120,101 @@ export const getSavedIdeas = async (req: Request, res: Response): Promise<any> =
       return res.status(401).json({ success: false, message: 'Not authorized' });
     }
 
-    const { page = 1, limit = 10 } = req.query as { page?: string | number; limit?: string | number };
-    
-    const pageNum = Number(page);
-    const limitNum = Number(limit);
+    const {
+      page = 1,
+      limit = 10,
+      search,
+      filter = 'all',
+      sortBy = 'createdAt',
+      sortOrder = 'desc'
+    } = req.query as {
+      page?: string | number;
+      limit?: string | number;
+      search?: string;
+      filter?: string;
+      sortBy?: string;
+      sortOrder?: string;
+    };
 
-    const ideas = await Idea.find({ userId: req.user._id })
-      .sort({ createdAt: -1 })
+    let pageNum = parseInt(String(page), 10);
+    if (isNaN(pageNum) || pageNum < 1) {
+      pageNum = 1;
+    }
+
+    let limitNum = parseInt(String(limit), 10);
+    if (isNaN(limitNum) || limitNum < 1) {
+      limitNum = 10;
+    } else if (limitNum > 50) {
+      limitNum = 50;
+    }
+
+    const query: any = { userId: req.user._id };
+
+    // Search filter with regex escaping
+    if (typeof search === 'string') {
+      const trimmedSearch = search.trim();
+      if (trimmedSearch.length > 0) {
+        const escaped = trimmedSearch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        query.ideaText = { $regex: escaped, $options: 'i' };
+      }
+    }
+
+    // Category / status filters
+    if (filter === 'top') {
+      query.overallScore = { $gte: 80 };
+    } else if (filter === 'deck') {
+      query['pitchDeckContent.problem'] = { $exists: true, $nin: ['', null] };
+    } else if (filter === 'none') {
+      query.$and = [
+        ...(query.$and || []),
+        {
+          $or: [
+            { 'pitchDeckContent.problem': { $exists: false } },
+            { 'pitchDeckContent.problem': null },
+            { 'pitchDeckContent.problem': '' }
+          ]
+        },
+        {
+          $or: [
+            { 'canvasContent.problem': { $exists: false } },
+            { 'canvasContent.problem': null },
+            { 'canvasContent.problem': '' }
+          ]
+        },
+        {
+          $or: [
+            { 'competitorAnalysis.summary': { $exists: false } },
+            { 'competitorAnalysis.summary': null },
+            { 'competitorAnalysis.summary': '' }
+          ]
+        },
+        {
+          $or: [
+            { 'pitchSimulation.questions': { $exists: false } },
+            { 'pitchSimulation.questions': null },
+            { 'pitchSimulation.questions': { $size: 0 } }
+          ]
+        }
+      ];
+    }
+
+    // Sort order & field
+    const sortField = sortBy === 'overallScore' ? 'overallScore' : 'createdAt';
+    const sortDirection = String(sortOrder).toLowerCase() === 'asc' ? 1 : -1;
+    const sortOptions: any = { [sortField]: sortDirection };
+
+    const total = await Idea.countDocuments(query);
+    const totalPages = Math.ceil(total / limitNum) || 0;
+
+    const ideas = await Idea.find(query)
+      .sort(sortOptions)
       .limit(limitNum)
       .skip((pageNum - 1) * limitNum);
-
-    const total = await Idea.countDocuments({ userId: req.user._id });
 
     res.json({
       success: true,
       ideas,
-      totalPages: Math.ceil(total / limitNum),
+      totalPages,
       currentPage: pageNum,
       total
     });
@@ -150,6 +229,10 @@ export const getSavedIdeas = async (req: Request, res: Response): Promise<any> =
 // @access  Private
 export const deleteIdea = async (req: Request, res: Response): Promise<any> => {
   try {
+    if (!req.user?._id) {
+      return res.status(401).json({ success: false, message: 'Not authorized' });
+    }
+
     const idea = await Idea.findById(req.params.id);
 
     if (!idea) {
@@ -157,7 +240,7 @@ export const deleteIdea = async (req: Request, res: Response): Promise<any> => {
     }
 
     // Check if the idea belongs to the user
-    if (idea.userId.toString() !== req.user?._id?.toString()) {
+    if (idea.userId.toString() !== req.user._id.toString()) {
       return res.status(403).json({ success: false, message: 'Not authorized to delete this idea' });
     }
 
@@ -171,6 +254,9 @@ export const deleteIdea = async (req: Request, res: Response): Promise<any> => {
 
     res.json({ message: 'Idea removed' });
   } catch (error: any) {
+    if (error.name === 'CastError') {
+      return res.status(404).json({ success: false, message: 'Idea not found' });
+    }
     console.error('Error deleting idea:', error);
     res.status(500).json({ success: false, message: error.message });
   }

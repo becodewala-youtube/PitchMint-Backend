@@ -206,9 +206,190 @@ describe('Ideas Integration Tests', () => {
         expect(item.userId).toBe(userA._id.toString());
       });
     });
+
+    it('should search ideas by text and escape special regex characters safely', async () => {
+      const user = await createTestUser();
+      const authHeader = createAuthHeader(user._id);
+
+      await createTestIdea(user._id, { ideaText: 'AI (v2.0) + Medical Assistant' });
+      await createTestIdea(user._id, { ideaText: 'Eco-friendly water bottle' });
+      await createTestIdea(user._id, { ideaText: 'Crypto portfolio tracker' });
+
+      // Search with special regex chars: '(' ')' '+'
+      const res = await request(app)
+        .get('/api/idea/saved?search=AI%20(v2.0)%20%2B')
+        .set(authHeader);
+
+      expect(res.status).toBe(200);
+      expect(res.body.total).toBe(1);
+      expect(res.body.ideas[0].ideaText).toBe('AI (v2.0) + Medical Assistant');
+    });
+
+    it('should filter ideas by "top" (overallScore >= 80)', async () => {
+      const user = await createTestUser();
+      const authHeader = createAuthHeader(user._id);
+
+      await createTestIdea(user._id, {
+        ideaText: 'Low score idea',
+        marketDemandScore: 65,
+        competitionScore: 65,
+        monetizationFeasibilityScore: 65,
+        overallScore: 65
+      });
+      await createTestIdea(user._id, {
+        ideaText: 'Medium score idea',
+        marketDemandScore: 79,
+        competitionScore: 79,
+        monetizationFeasibilityScore: 79,
+        overallScore: 79
+      });
+      await createTestIdea(user._id, {
+        ideaText: 'Top score idea 1',
+        marketDemandScore: 80,
+        competitionScore: 80,
+        monetizationFeasibilityScore: 80,
+        overallScore: 80
+      });
+      await createTestIdea(user._id, {
+        ideaText: 'Top score idea 2',
+        marketDemandScore: 95,
+        competitionScore: 95,
+        monetizationFeasibilityScore: 95,
+        overallScore: 95
+      });
+
+      const res = await request(app)
+        .get('/api/idea/saved?filter=top')
+        .set(authHeader);
+
+      expect(res.status).toBe(200);
+      expect(res.body.total).toBe(2);
+      res.body.ideas.forEach((idea: any) => {
+        expect(idea.overallScore).toBeGreaterThanOrEqual(80);
+      });
+    });
+
+    it('should filter ideas by "deck" (pitchDeckContent.problem exists and ne "")', async () => {
+      const user = await createTestUser();
+      const authHeader = createAuthHeader(user._id);
+
+      await createTestIdea(user._id, {
+        ideaText: 'Idea with pitch deck',
+        pitchDeckContent: { problem: 'Inefficient workflow' } as any
+      });
+      await createTestIdea(user._id, {
+        ideaText: 'Idea with empty pitch deck',
+        pitchDeckContent: { problem: '' } as any
+      });
+      await createTestIdea(user._id, {
+        ideaText: 'Idea without pitch deck'
+      });
+
+      const res = await request(app)
+        .get('/api/idea/saved?filter=deck')
+        .set(authHeader);
+
+      expect(res.status).toBe(200);
+      expect(res.body.total).toBe(1);
+      expect(res.body.ideas[0].ideaText).toBe('Idea with pitch deck');
+    });
+
+    it('should filter ideas by "none" (unexpanded ideas with no deck, canvas, competitors, or simulation)', async () => {
+      const user = await createTestUser();
+      const authHeader = createAuthHeader(user._id);
+
+      // Raw idea with no toolkits
+      await createTestIdea(user._id, { ideaText: 'Raw validation only' });
+
+      // Idea with deck
+      await createTestIdea(user._id, {
+        ideaText: 'Idea with deck',
+        pitchDeckContent: { problem: 'Problem exists' } as any
+      });
+
+      // Idea with canvas
+      await createTestIdea(user._id, {
+        ideaText: 'Idea with canvas',
+        canvasContent: { problem: 'Canvas problem' } as any
+      });
+
+      const res = await request(app)
+        .get('/api/idea/saved?filter=none')
+        .set(authHeader);
+
+      expect(res.status).toBe(200);
+      expect(res.body.total).toBe(1);
+      expect(res.body.ideas[0].ideaText).toBe('Raw validation only');
+    });
+
+    it('should sort ideas by overallScore descending and ascending', async () => {
+      const user = await createTestUser();
+      const authHeader = createAuthHeader(user._id);
+
+      await createTestIdea(user._id, {
+        ideaText: 'Score 70',
+        marketDemandScore: 70,
+        competitionScore: 70,
+        monetizationFeasibilityScore: 70,
+        overallScore: 70
+      });
+      await createTestIdea(user._id, {
+        ideaText: 'Score 90',
+        marketDemandScore: 90,
+        competitionScore: 90,
+        monetizationFeasibilityScore: 90,
+        overallScore: 90
+      });
+      await createTestIdea(user._id, {
+        ideaText: 'Score 80',
+        marketDemandScore: 80,
+        competitionScore: 80,
+        monetizationFeasibilityScore: 80,
+        overallScore: 80
+      });
+
+      // Sort desc
+      const resDesc = await request(app)
+        .get('/api/idea/saved?sortBy=overallScore&sortOrder=desc')
+        .set(authHeader);
+
+      expect(resDesc.status).toBe(200);
+      expect(resDesc.body.ideas[0].overallScore).toBe(90);
+      expect(resDesc.body.ideas[1].overallScore).toBe(80);
+      expect(resDesc.body.ideas[2].overallScore).toBe(70);
+
+      // Sort asc
+      const resAsc = await request(app)
+        .get('/api/idea/saved?sortBy=overallScore&sortOrder=asc')
+        .set(authHeader);
+
+      expect(resAsc.status).toBe(200);
+      expect(resAsc.body.ideas[0].overallScore).toBe(70);
+      expect(resAsc.body.ideas[1].overallScore).toBe(80);
+      expect(resAsc.body.ideas[2].overallScore).toBe(90);
+    });
   });
 
   describe('DELETE /api/idea/:id', () => {
+    it('should reject deletion with 401 when request is unauthenticated', async () => {
+      const res = await request(app)
+        .delete('/api/idea/507f1f77bcf86cd799439011');
+
+      expect(res.status).toBe(401);
+    });
+
+    it('should return 404 when idea does not exist or id is invalid', async () => {
+      const user = await createTestUser();
+      const authHeader = createAuthHeader(user._id);
+
+      const res = await request(app)
+        .delete('/api/idea/507f1f77bcf86cd799439011')
+        .set(authHeader);
+
+      expect(res.status).toBe(404);
+      expect(res.body.message).toBe('Idea not found');
+    });
+
     it('should reject deletion with 403 when user is not the owner', async () => {
       const owner = await createTestUser({ email: 'owner_del@example.com' });
       const idea = await createTestIdea(owner._id);
