@@ -15,8 +15,11 @@ describe('Idempotency Middleware Unit Tests', () => {
   let sendMock: jest.Mock;
   let onMock: jest.Mock;
 
-  const getPayloadHash = (payload: any) =>
-    crypto.createHash('sha256').update(JSON.stringify(canonicalize(payload || {}))).digest('hex');
+  const getPayloadHash = (body: any, query: any = {}) =>
+    crypto
+      .createHash('sha256')
+      .update(JSON.stringify(canonicalize({ body: body || {}, query: query || {} })))
+      .digest('hex');
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -29,6 +32,7 @@ describe('Idempotency Middleware Unit Tests', () => {
       method: 'POST',
       headers: {},
       body: { ideaText: 'AI assistant for lawyers' },
+      query: {},
       originalUrl: '/api/idea/submit',
       user: { _id: new mongoose.Types.ObjectId() } as any
     };
@@ -574,6 +578,44 @@ describe('Idempotency Middleware Unit Tests', () => {
       const assignedExpiresAt = updateCall[1].$set.expiresAt.getTime();
       expect(assignedExpiresAt).toBeGreaterThanOrEqual(beforeComplete + 24 * 60 * 60 * 1000);
       expect(assignedExpiresAt).toBeLessThanOrEqual(afterComplete + 24 * 60 * 60 * 1000);
+    });
+
+    test('should produce identical canonical fingerprint for equivalent query parameters in different key orders', () => {
+      const hash1 = getPayloadHash({ ideaId: '123' }, { regenerate: 'true', filter: 'active', page: '1' });
+      const hash2 = getPayloadHash({ ideaId: '123' }, { page: '1', filter: 'active', regenerate: 'true' });
+      expect(hash1).toBe(hash2);
+    });
+
+    test('should produce different canonical fingerprints when query parameters differ', () => {
+      const hashWithoutQuery = getPayloadHash({ ideaId: '123' }, {});
+      const hashWithQuery = getPayloadHash({ ideaId: '123' }, { regenerate: 'true' });
+      expect(hashWithoutQuery).not.toBe(hashWithQuery);
+    });
+
+    test('should reject with 409 Conflict when duplicate key is used with differing query parameters', async () => {
+      req.headers = { 'idempotency-key': 'test-key-diff-query' };
+      req.query = { regenerate: 'true' };
+      const duplicateError: any = new Error('E11000 duplicate key');
+      duplicateError.code = 11000;
+      (IdempotencyRecord.create as jest.Mock).mockRejectedValue(duplicateError);
+
+      (IdempotencyRecord.findOne as jest.Mock).mockResolvedValue({
+        httpMethod: 'POST',
+        endpoint: '/api/idea/submit',
+        requestPayloadHash: getPayloadHash(req.body, {}), // Saved without query
+        status: 'completed',
+        responseStatus: 201,
+        responseData: { _id: 'idea-1' }
+      });
+
+      await idempotencyMiddleware(req as Request, res as Response, next);
+
+      expect(statusMock).toHaveBeenCalledWith(409);
+      expect(jsonMock).toHaveBeenCalledWith({
+        success: false,
+        message: 'Idempotency key has already been used with a different request payload or endpoint.'
+      });
+      expect(next).not.toHaveBeenCalled();
     });
   });
 });

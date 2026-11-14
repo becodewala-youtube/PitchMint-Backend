@@ -759,7 +759,7 @@ describe('Idempotency Integration Tests', () => {
       // Simulate a record left permanently in_progress by an ungraceful server crash from 12 hours ago
       const crypto = await import('crypto');
       const { canonicalize } = await import('../../../../shared/middleware/idempotency.middleware');
-      const hash = crypto.createHash('sha256').update(JSON.stringify(canonicalize(payload))).digest('hex');
+      const hash = crypto.createHash('sha256').update(JSON.stringify(canonicalize({ body: payload, query: {} }))).digest('hex');
 
       await IdempotencyRecord.create({
         userId: user._id,
@@ -804,7 +804,7 @@ describe('Idempotency Integration Tests', () => {
       const crypto = await import('crypto');
       const { canonicalize } = await import('../../../../shared/middleware/idempotency.middleware');
       const payload = { ideaText: 'Deep sea mineral mapping' };
-      const hash = crypto.createHash('sha256').update(JSON.stringify(canonicalize(payload))).digest('hex');
+      const hash = crypto.createHash('sha256').update(JSON.stringify(canonicalize({ body: payload, query: {} }))).digest('hex');
       const idempotencyKey = 'fresh-ttl-retry-key';
 
       const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
@@ -843,6 +843,100 @@ describe('Idempotency Integration Tests', () => {
       expect(freshExpiresMs).toBeGreaterThanOrEqual(beforeRetry + 24 * 60 * 60 * 1000);
       expect(freshExpiresMs).toBeLessThanOrEqual(afterRetry + 24 * 60 * 60 * 1000);
       expect(freshExpiresMs).toBeGreaterThan(oldExpiry.getTime());
+    });
+  });
+
+  describe('Query Parameter Fingerprinting (API-02)', () => {
+    it('should reject with 409 when duplicate key is reused on pitch simulator with different query params (?regenerate=true)', async () => {
+      const user = await createTestUser({ monthlyCredits: 5 });
+      const idea = await createTestIdea(user._id);
+      const authHeader = createAuthHeader(user._id);
+
+      (geminiClient.simulateInvestorQA as jest.Mock).mockResolvedValue(mockGeminiResponses.pitchSimulation);
+
+      const idempotencyKey = 'pitch-sim-query-diff-key';
+
+      // 1. Initial request without regenerate query param
+      const res1 = await request(app)
+        .post(`/api/pitch-simulator/simulate/${idea._id}`)
+        .set(authHeader)
+        .set('Idempotency-Key', idempotencyKey)
+        .send({});
+
+      expect(res1.status).toBe(200);
+
+      const userAfterFirst = await User.findById(user._id);
+      expect(userAfterFirst?.credits).toBe(4);
+      expect(geminiClient.simulateInvestorQA).toHaveBeenCalledTimes(1);
+
+      const originalRecord = await IdempotencyRecord.findOne({ userId: user._id, idempotencyKey });
+      expect(originalRecord?.status).toBe('completed');
+      const originalHash = originalRecord?.requestPayloadHash;
+
+      // 2. Duplicate request with same key but ?regenerate=true
+      const res2 = await request(app)
+        .post(`/api/pitch-simulator/simulate/${idea._id}?regenerate=true`)
+        .set(authHeader)
+        .set('Idempotency-Key', idempotencyKey)
+        .send({});
+
+      // 3. Confirm second request receives HTTP 409
+      expect(res2.status).toBe(409);
+      expect(res2.body).toEqual({
+        success: false,
+        message: 'Idempotency key has already been used with a different request payload or endpoint.'
+      });
+
+      // 4. Confirm Gemini is called only once
+      expect(geminiClient.simulateInvestorQA).toHaveBeenCalledTimes(1);
+
+      // 5. Confirm credits are deducted only once
+      const userAfterSecond = await User.findById(user._id);
+      expect(userAfterSecond?.credits).toBe(4);
+
+      // 6. Confirm original record remains unchanged
+      const recordAfterSecond = await IdempotencyRecord.findOne({ userId: user._id, idempotencyKey });
+      expect(recordAfterSecond?.status).toBe('completed');
+      expect(recordAfterSecond?.requestPayloadHash).toBe(originalHash);
+      expect(recordAfterSecond?.responseStatus).toBe(200);
+    });
+
+    it('should treat equivalent query parameters in different key orders as identical and return cached response', async () => {
+      const user = await createTestUser({ monthlyCredits: 5 });
+      const idea = await createTestIdea(user._id);
+      const authHeader = createAuthHeader(user._id);
+
+      (geminiClient.simulateInvestorQA as jest.Mock).mockResolvedValue(mockGeminiResponses.pitchSimulation);
+
+      const idempotencyKey = 'pitch-sim-query-order-key';
+
+      // Request 1 with ?regenerate=true&lang=en
+      const res1 = await request(app)
+        .post(`/api/pitch-simulator/simulate/${idea._id}?regenerate=true&lang=en`)
+        .set(authHeader)
+        .set('Idempotency-Key', idempotencyKey)
+        .send({});
+
+      expect(res1.status).toBe(200);
+      const userAfterFirst = await User.findById(user._id);
+      expect(userAfterFirst?.credits).toBe(4);
+
+      // Request 2 with ?lang=en&regenerate=true (different query key order)
+      const res2 = await request(app)
+        .post(`/api/pitch-simulator/simulate/${idea._id}?lang=en&regenerate=true`)
+        .set(authHeader)
+        .set('Idempotency-Key', idempotencyKey)
+        .send({});
+
+      expect(res2.status).toBe(200);
+      expect(res2.body.pitchSimulation).toBeDefined();
+
+      // Zero additional credits deducted
+      const userAfterSecond = await User.findById(user._id);
+      expect(userAfterSecond?.credits).toBe(4);
+
+      // Gemini not called a second time
+      expect(geminiClient.simulateInvestorQA).toHaveBeenCalledTimes(1);
     });
   });
 });

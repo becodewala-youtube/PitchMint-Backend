@@ -50,7 +50,10 @@ export const idempotencyMiddleware = async (
   const rawPath = req.originalUrl ? req.originalUrl.split('?')[0] : (req.baseUrl + req.path);
   const endpoint = (rawPath || '').replace(/\/+$/, '') || '/';
 
-  const canonicalPayload = canonicalize(req.body || {});
+  const canonicalPayload = canonicalize({
+    body: req.body || {},
+    query: req.query || {}
+  });
   const requestPayloadHash = crypto
     .createHash('sha256')
     .update(JSON.stringify(canonicalPayload))
