@@ -199,8 +199,22 @@ export const googleAuth = async (req: Request, res: Response): Promise<any> => {
   try {
     const { credential } = req.body;
 
-    // Verify Google token
-    const payload = await authService.verifyGoogleToken(credential);
+    if (!credential || typeof credential !== 'string') {
+      return res.status(400).json({ success: false, message: 'Invalid Google credential' });
+    }
+
+    // Verify Google token with provider
+    let payload;
+    try {
+      payload = await authService.verifyGoogleToken(credential);
+    } catch (verifyError: any) {
+      logger.warn('Google token verification failed:', verifyError?.message || verifyError);
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid or expired Google authentication credentials',
+      });
+    }
+
     if (!payload) {
       return res.status(400).json({ success: false, message: 'Invalid Google credential' });
     }

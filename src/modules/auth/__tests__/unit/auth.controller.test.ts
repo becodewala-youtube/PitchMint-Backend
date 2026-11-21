@@ -341,6 +341,31 @@ describe('Auth Controller Unit Tests', () => {
   });
 
   describe('googleAuth', () => {
+    test('should return 400 if google credential is missing', async () => {
+      req.body = {};
+
+      await googleAuth(req as Request, res as Response);
+
+      expect(statusMock).toHaveBeenCalledWith(400);
+      expect(jsonMock).toHaveBeenCalledWith(expect.objectContaining({
+        message: 'Invalid Google credential'
+      }));
+    });
+
+    test('should return 401 if verifyGoogleToken rejects with invalid or expired token', async () => {
+      req.body = { credential: 'expired-or-invalid-token' };
+      (authService.verifyGoogleToken as jest.Mock).mockRejectedValue(
+        new Error('Token used too late')
+      );
+
+      await googleAuth(req as Request, res as Response);
+
+      expect(statusMock).toHaveBeenCalledWith(401);
+      expect(jsonMock).toHaveBeenCalledWith(expect.objectContaining({
+        message: 'Invalid or expired Google authentication credentials'
+      }));
+    });
+
     test('should return 400 if google credential is invalid', async () => {
       req.body = { credential: 'bad-token' };
       (authService.verifyGoogleToken as jest.Mock).mockResolvedValue(null);
